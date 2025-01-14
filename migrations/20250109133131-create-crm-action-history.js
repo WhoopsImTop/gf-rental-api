@@ -13,7 +13,7 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       action: {
-        type: Sequelize.ENUM('Anruf', 'E-Mail', 'Brief', 'Änderung', 'Löschung')
+        type: Sequelize.ENUM('Anruf', 'E-Mail', 'Brief', 'Änderung', 'Löschung', 'Aktion')
       },
       title: {
         type: Sequelize.STRING

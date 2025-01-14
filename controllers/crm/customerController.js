@@ -1,5 +1,4 @@
 const db = require("../../models");
-const { encrypt } = require("../../services/encryption");
 const { getGeoData } = require("../../services/geoCoder");
 
 exports.createCustomer = async (req, res) => {
@@ -9,12 +8,7 @@ exports.createCustomer = async (req, res) => {
     //check if customer already exists by companyName, email, street, houseNumber, postalCode, city
     const existingCustomer = await db.CrmCustomer.findOne({
       where: {
-        companyName: encrypt(body.companyName),
-        email: encrypt(body.email),
-        street: encrypt(body.street),
-        houseNumber: encrypt(body.houseNumber),
-        postalCode: encrypt(body.postalCode),
-        city: encrypt(body.city),
+        companyName: body.companyName,
       },
     });
     if (existingCustomer) {
@@ -29,9 +23,8 @@ exports.createCustomer = async (req, res) => {
     body.lng = lng;
     const customer = await db.CrmCustomer.create(body);
 
-    //relate customer with user
-    const userId = req.user.id;
-    await customer.setUser(userId);
+    //associate customer with user
+    await customer.addUser(req.user.id);
 
     return res.status(201).json(customer);
   } catch (error) {
@@ -66,8 +59,13 @@ exports.findOneCustomer = async (req, res) => {
       include: [
         {
           model: db.CrmActionHistory,
+        },
+        {
           model: db.CrmStatuses,
+        },
+        {
           model: db.User,
+          through: { attributes: [] },
         },
       ],
     });
@@ -128,13 +126,50 @@ exports.updateCustomer = async (req, res) => {
 exports.setCustomerAction = async (req, res) => {
   try {
     const { id } = req.params;
-    const { action, title, comment } = req.body;
+    const { action, comment } = req.body;
     const userId = req.user.id;
 
     const customer = await db.CrmCustomer.findOne({ where: { id } });
     if (!customer) {
       throw new Error("Customer not found");
     }
+
+    const statusMessages = [
+      {
+        status: "Änderung",
+        titlePlaceHolder: "{{Vorname}} {{Nachname}} hat daten aktualisiert",
+      },
+      {
+        status: "Löschung",
+        titlePlaceHolder: "{{Vorname}} {{Nachname}} wurde gelöscht",
+      },
+      {
+        status: "Anruf",
+        titlePlaceHolder: "{{Vorname}} {{Nachname}} wurde angerufen",
+      },
+      {
+        status: "E-Mail",
+        titlePlaceHolder: "{{Vorname}} {{Nachname}} wurde eine E-Mail gesendet",
+      },
+      {
+        status: "Brief",
+        titlePlaceHolder: "{{Vorname}} {{Nachname}} wurde ein Brief gesendet",
+      },
+      {
+        status: "Aktion",
+        titlePlaceHolder:
+          "{{Vorname}} {{Nachname}} wurde eine Aktion durchgeführt",
+      },
+    ];
+
+    let title = statusMessages.find(
+      (message) => message.status === action
+    ).titlePlaceHolder;
+
+    //replace placeholders with customer data
+    title = title
+      .replace("{{Vorname}}", req.user.firstName)
+      .replace("{{Nachname}}", req.user.lastName);
 
     const actionHistory = await db.CrmActionHistory.create({
       crmCustomerId: id,
@@ -145,6 +180,29 @@ exports.setCustomerAction = async (req, res) => {
     });
 
     return res.status(201).json(actionHistory);
+  } catch (error) {
+    return res.status(500).send({ error: error.message });
+  }
+};
+
+exports.assignUserToCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    const customer = await db.CrmCustomer.findOne({ where: { id } });
+    if (!customer) {
+      throw new Error("Customer not found");
+    }
+
+    const user = await db.User.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    await customer.addUser(user);
+
+    return res.status(200).json(customer);
   } catch (error) {
     return res.status(500).send({ error: error.message });
   }

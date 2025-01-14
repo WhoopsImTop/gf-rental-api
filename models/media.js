@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Media extends Model {
     /**
@@ -11,16 +9,30 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
-      Media.belongsTo(models.CarAbo);
+      Media.belongsToMany(models.CarAbo, {
+        through: "MediaCrmCarAbos",
+        foreignKey: "mediaId",
+        otherKey: "carAboId",
+      });
+      Media.belongsToMany(models.CrmStatuses, {
+        through: "MediaCrmStatuses",
+        foreignKey: "mediaId",
+        otherKey: "crmStatusId",
+      });
     }
   }
-  Media.init({
-    name: DataTypes.STRING,
-    fileSize: DataTypes.INTEGER,
-    fileType: DataTypes.STRING
-  }, {
-    sequelize,
-    modelName: 'Media',
-  });
+  Media.init(
+    {
+      name: DataTypes.STRING,
+      fileSize: DataTypes.INTEGER,
+      fileType: DataTypes.STRING,
+      url: DataTypes.STRING,
+      statusId: DataTypes.INTEGER,
+    },
+    {
+      sequelize,
+      modelName: "Media",
+    }
+  );
   return Media;
 };

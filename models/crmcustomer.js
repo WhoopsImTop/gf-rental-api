@@ -11,8 +11,14 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       // define association here
       CrmCustomer.hasMany(models.CrmActionHistory);
-      CrmCustomer.hasOne(models.CrmStatuses);
-      CrmCustomer.belongsTo(models.User);
+      CrmCustomer.belongsTo(models.CrmStatuses, {
+        foreignKey: "statusId",
+      });
+      CrmCustomer.belongsToMany(models.User, {
+        through: "UserCrmCustomers",
+        foreignKey: "crmCustomerId",
+        otherKey: "userId",
+      });
     }
   }
   CrmCustomer.init(
@@ -64,7 +70,6 @@ module.exports = (sequelize, DataTypes) => {
   const excryptedFields = [
     "firstName",
     "lastName",
-    "companyName",
     "email",
     "altEmail",
     "phone",
@@ -73,7 +78,7 @@ module.exports = (sequelize, DataTypes) => {
     "houseNumber",
     "postalCode",
     "city",
-    "country"
+    "country",
   ];
 
   CrmCustomer.beforeCreate((crmCustomer, options) => {
@@ -105,8 +110,13 @@ module.exports = (sequelize, DataTypes) => {
         });
       } else {
         excryptedFields.forEach((field) => {
-          if (crmCustomer.dataValues[field] && isEncrypted(crmCustomer[field])) {
-            crmCustomer.dataValues[field] = decrypt(crmCustomer.dataValues[field]);
+          if (
+            crmCustomer.dataValues[field] &&
+            isEncrypted(crmCustomer[field])
+          ) {
+            crmCustomer.dataValues[field] = decrypt(
+              crmCustomer.dataValues[field]
+            );
           }
         });
       }

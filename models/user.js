@@ -17,9 +17,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "userId",
         as: "contracts",
       });
-      User.hasMany(models.CrmCustomer, {
+      User.belongsToMany(models.CrmCustomer, {
+        through: "UserCrmCustomers",
         foreignKey: "userId",
-        as: "crmCustomers",
+        otherKey: "crmCustomerId",
       });
     }
   }
@@ -46,7 +47,9 @@ module.exports = (sequelize, DataTypes) => {
       sequelize,
       modelName: "User",
       defaultScope: {
-        attributes: { exclude: ["passwordHash", "createdAt", "updatedAt", "role"] },
+        attributes: {
+          exclude: ["passwordHash", "createdAt", "updatedAt", "role"],
+        },
       },
       scopes: {
         withPassword: {
