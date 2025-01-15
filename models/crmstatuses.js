@@ -14,10 +14,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "crmStatusId",
         otherKey: "crmCustomerId",
       });
-      CrmStatuses.belongsTo(models.Media, {
-        through: "MediaCrmStatuses",
-        foreignKey: "crmStatusId",
-        otherKey: "mediaId",
+      CrmStatuses.hasOne(models.Media, {
+        foreignKey: "statusId", // Spalte in der Media-Tabelle
+        sourceKey: "id", // Spalte in der CrmStatuses-Tabelle
+        as: "media",
       });
     }
   }

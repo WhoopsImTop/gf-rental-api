@@ -10,11 +10,15 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
-      CrmCustomer.hasMany(models.CrmActionHistory);
+      CrmCustomer.hasMany(models.CrmActionHistory, {
+        as: "actionHistory",
+      });
       CrmCustomer.belongsTo(models.CrmStatuses, {
         foreignKey: "statusId",
+        as: 'status'
       });
       CrmCustomer.belongsToMany(models.User, {
+        as: "users",
         through: "UserCrmCustomers",
         foreignKey: "crmCustomerId",
         otherKey: "userId",
@@ -38,6 +42,7 @@ module.exports = (sequelize, DataTypes) => {
       altEmail: DataTypes.TEXT,
       phone: DataTypes.TEXT,
       altPhone: DataTypes.TEXT,
+      website: DataTypes.TEXT,
       street: DataTypes.TEXT,
       houseNumber: DataTypes.TEXT,
       postalCode: DataTypes.TEXT,
@@ -56,6 +61,7 @@ module.exports = (sequelize, DataTypes) => {
       ),
       marketingOptIn: DataTypes.BOOLEAN,
       marketingOptInDate: DataTypes.STRING,
+      notes: DataTypes.TEXT,
       userId: DataTypes.INTEGER,
       deletedAt: DataTypes.DATE,
       createdAt: DataTypes.DATE,
@@ -74,11 +80,13 @@ module.exports = (sequelize, DataTypes) => {
     "altEmail",
     "phone",
     "altPhone",
+    "website",
     "street",
     "houseNumber",
     "postalCode",
     "city",
     "country",
+    "notes",
   ];
 
   CrmCustomer.beforeCreate((crmCustomer, options) => {

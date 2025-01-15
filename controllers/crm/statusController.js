@@ -2,17 +2,21 @@ const db = require("../../models");
 
 exports.createStatus = async (req, res) => {
   try {
+    if(!req.file){
+      return res.status(400).send("Please upload a file!");
+    }
     //create Media Object in DB
     const media = await db.Media.create({
         name: req.file.originalname,
         fileSize: req.file.size,
         fileType: req.file.mimetype,
-        media_url: process.env.APPURL + "/public/uploads/" + req.file.filename,
+        url: process.env.APPURL + "/public/uploads/" + req.file.filename,
     });
     //create CrmStatus Object in DB
     const status = await db.CrmStatuses.create(req.body);
-    //associate media with status
-    await status.addMedia(media);
+    //set statusId in Media Object
+    media.statusId = status.id;
+    await media.save();
     return res.status(201).json(status);
   } catch (error) {
     return res
@@ -27,8 +31,8 @@ exports.findAllStatuses = async (req, res) => {
       include: [
         {
           model: db.Media,
-          through: { attributes: [] },
           attributes: ["id", "name", "fileSize", "fileType", "url"],
+          as: "media",
         },
       ],
     });

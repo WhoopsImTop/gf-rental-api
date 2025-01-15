@@ -44,6 +44,9 @@ module.exports = {
       altPhone: {
         type: Sequelize.TEXT,
       },
+      website: {
+        type: Sequelize.TEXT,
+      },
       street: {
         type: Sequelize.TEXT,
       },
@@ -79,6 +82,9 @@ module.exports = {
       },
       marketingOptInDate: {
         type: Sequelize.STRING,
+      },
+      notes: {
+        type: Sequelize.TEXT,
       },
       createdAt: {
         allowNull: false,

@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors");
 const bodyParser = require("body-parser");
 const { sequelize } = require("./models");
 
@@ -6,6 +7,7 @@ const { sequelize } = require("./models");
 const carAboRoute = require("./routes/carAboRoute");
 const crmCustomerRoute = require("./routes/crm/customerRoute");
 const statusRoute = require("./routes/crm/statusRoute");
+const userRoute = require("./routes/general/userRoute");
 
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
 const AuthMiddleware = require("./middleware/authMiddleware");
@@ -15,6 +17,7 @@ const app = express();
 
 // Middleware
 app.use(bodyParser.json());
+app.use(cors());
 
 //make public folder static
 app.use("/public", express.static("public"));
@@ -25,10 +28,13 @@ app.get("/", (req, res) => {
 });
 
 // Routen
-app.use("/auth", AuthentificationRoute);
-app.use("/car-abos", carAboRoute);
-app.use("/crm/customers", AuthMiddleware, crmCustomerRoute);
-app.use("/crm/status", AuthMiddleware, statusRoute);
+app.use("/api/auth", AuthentificationRoute);
+app.use("/api/users", AuthMiddleware, userRoute);
+app.use("/api/car-abos", carAboRoute);
+
+//CRM-Routes
+app.use("/api/crm/customers", AuthMiddleware, crmCustomerRoute);
+app.use("/api/crm/status", statusRoute);
 
 // Server starten und Datenbankverbindung prüfen
 app.listen(serverPort, async () => {

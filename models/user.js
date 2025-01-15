@@ -1,5 +1,6 @@
 "use strict";
 const { Model } = require("sequelize");
+const { encrypt, decrypt } = require("../services/encryption");
 module.exports = (sequelize, DataTypes) => {
   class User extends Model {
     /**
@@ -26,11 +27,55 @@ module.exports = (sequelize, DataTypes) => {
   }
   User.init(
     {
-      firstName: DataTypes.STRING,
-      lastName: DataTypes.STRING,
-      email: DataTypes.STRING,
-      phone: DataTypes.STRING,
-      passwordHash: DataTypes.TEXT,
+      firstName: {
+        type: DataTypes.STRING,
+        set(value) {
+          this.setDataValue("firstName", encrypt(value));
+        },
+        get() {
+          const value = this.getDataValue("firstName");
+          return value ? decrypt(value) : null;
+        },
+      },
+      lastName: {
+        type: DataTypes.STRING,
+        set(value) {
+          this.setDataValue("lastName", encrypt(value));
+        },
+        get() {
+          const value = this.getDataValue("lastName");
+          return value ? decrypt(value) : null;
+        },
+      },
+      emailHash: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true,
+      },
+      email: {
+        type: DataTypes.STRING,
+        set(value) {
+          this.setDataValue("email", encrypt(value));
+        },
+        get() {
+          const value = this.getDataValue("email");
+          return value ? decrypt(value) : null;
+        },
+      },
+      phone: {
+        type: DataTypes.STRING,
+        set(value) {
+          this.setDataValue("phone", encrypt(value));
+        },
+        get() {
+          const value = this.getDataValue("phone");
+          return value ? decrypt(value) : null;
+        },
+      },
+      passwordHash: {
+        type: DataTypes.TEXT,
+        allowNull: false,
+      },
       role: DataTypes.ENUM("customer", "admin", "seller"),
       createdAt: {
         allowNull: false,

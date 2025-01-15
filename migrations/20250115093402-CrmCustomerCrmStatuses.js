@@ -1,42 +1,32 @@
 "use strict";
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable("Users", {
+    await queryInterface.createTable("CrmCustomerCrmStatuses", {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER,
       },
-      firstName: {
-        type: Sequelize.STRING,
+      crmCustomerId: {
+        type: Sequelize.INTEGER,
         allowNull: false,
+        references: {
+          model: "CrmCustomers", // Name der Tabelle für das User-Modell
+          key: "id",
+        },
+        onDelete: "CASCADE",
       },
-      lastName: {
-        type: Sequelize.STRING,
+      crmStatusId: {
+        type: Sequelize.INTEGER,
         allowNull: false,
-      },
-      email: {
-        type: Sequelize.STRING,
-        allowNull: false,
-        unique: true,
-      },
-      emailHash: {
-        type: Sequelize.STRING,
-        allowNull: false,
-        unique: true,
-      },
-      phone: {
-        type: Sequelize.STRING,
-        unique: true,
-      },
-      passwordHash: {
-        type: Sequelize.TEXT,
-        allowNull: false,
-      },
-      role: {
-        type: Sequelize.ENUM("customer", "admin", "seller"),
+        references: {
+          model: "CrmStatuses", // Name der Tabelle für das CrmCustomer-Modell
+          key: "id",
+        },
+        onDelete: "CASCADE",
       },
       createdAt: {
         allowNull: false,
@@ -50,7 +40,13 @@ module.exports = {
       },
     });
   },
+
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable("Users");
+    /**
+     * Add reverting commands here.
+     *
+     * Example:
+     * await queryInterface.dropTable('users');
+     */
   },
 };

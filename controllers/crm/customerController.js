@@ -26,6 +26,10 @@ exports.createCustomer = async (req, res) => {
     //associate customer with user
     await customer.addUser(req.user.id);
 
+    //set default status to new
+    const status = await db.CrmStatuses.findOne({ where: { iconName: "new" } });
+    await customer.setStatus(status);
+
     return res.status(201).json(customer);
   } catch (error) {
     return res
@@ -40,8 +44,16 @@ exports.findAllCustomers = async (req, res) => {
       include: [
         {
           model: db.CrmActionHistory,
+          as: "actionHistory",
+        },
+        {
           model: db.CrmStatuses,
+          as: "status",
+        },
+        {
           model: db.User,
+          as: "users", // Alias für die User-Assoziation angeben
+          through: { attributes: [] },
         },
       ],
     });
@@ -59,12 +71,15 @@ exports.findOneCustomer = async (req, res) => {
       include: [
         {
           model: db.CrmActionHistory,
+          as: "actionHistory",
         },
         {
           model: db.CrmStatuses,
+          as: "status",
         },
         {
           model: db.User,
+          as: "users", // Alias für die User-Assoziation angeben
           through: { attributes: [] },
         },
       ],
@@ -141,24 +156,24 @@ exports.setCustomerAction = async (req, res) => {
       },
       {
         status: "Löschung",
-        titlePlaceHolder: "{{Vorname}} {{Nachname}} wurde gelöscht",
+        titlePlaceHolder: "Wurde von {{Vorname}} {{Nachname}} gelöscht",
       },
       {
         status: "Anruf",
-        titlePlaceHolder: "{{Vorname}} {{Nachname}} wurde angerufen",
+        titlePlaceHolder: "Wurde von {{Vorname}} {{Nachname}} angerufen",
       },
       {
         status: "E-Mail",
-        titlePlaceHolder: "{{Vorname}} {{Nachname}} wurde eine E-Mail gesendet",
+        titlePlaceHolder: "{{Vorname}} {{Nachname}} hat eine E-Mail gesendet",
       },
       {
         status: "Brief",
-        titlePlaceHolder: "{{Vorname}} {{Nachname}} wurde ein Brief gesendet",
+        titlePlaceHolder: "{{Vorname}} {{Nachname}} hat einen Brief versendet",
       },
       {
         status: "Aktion",
         titlePlaceHolder:
-          "{{Vorname}} {{Nachname}} wurde eine Aktion durchgeführt",
+          "{{Vorname}} {{Nachname}} hat eine Aktion durchgeführt",
       },
     ];
 
