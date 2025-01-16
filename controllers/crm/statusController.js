@@ -2,15 +2,15 @@ const db = require("../../models");
 
 exports.createStatus = async (req, res) => {
   try {
-    if(!req.file){
+    if (!req.file) {
       return res.status(400).send("Please upload a file!");
     }
     //create Media Object in DB
     const media = await db.Media.create({
-        name: req.file.originalname,
-        fileSize: req.file.size,
-        fileType: req.file.mimetype,
-        url: process.env.APPURL + "/public/uploads/" + req.file.filename,
+      name: req.file.originalname,
+      fileSize: req.file.size,
+      fileType: req.file.mimetype,
+      url: process.env.APPURL + "/public/uploads/" + req.file.filename,
     });
     //create CrmStatus Object in DB
     const status = await db.CrmStatuses.create(req.body);
@@ -50,6 +50,8 @@ exports.findOneStatus = async (req, res) => {
       include: [
         {
           model: db.Media,
+          attributes: ["id", "name", "fileSize", "fileType", "url"],
+          as: "media",
         },
       ],
     });

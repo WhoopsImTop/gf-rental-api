@@ -6,31 +6,56 @@ exports.createCustomer = async (req, res) => {
     const body = req.body;
 
     //check if customer already exists by companyName, email, street, houseNumber, postalCode, city
-    const existingCustomer = await db.CrmCustomer.findOne({
-      where: {
-        companyName: body.companyName,
-      },
-    });
-    if (existingCustomer) {
-      return res.status(400).json({ message: "Customer already exists" });
+    if (req.body.customerType != "Privatkunde") {
+      const existingCustomer = await db.CrmCustomer.findOne({
+        where: {
+          companyName: body.companyName,
+        },
+      });
+      if (existingCustomer) {
+        return res.status(400).json({ message: "Customer already exists" });
+      }
     }
-
     // Geocode the address
     const { street, houseNumber, postalCode, city } = body;
-    const address = `${street} ${houseNumber}, ${postalCode} ${city}`;
-    const { lat, lng } = await getGeoData(address);
-    body.lat = lat;
-    body.lng = lng;
+    if (street && houseNumber && postalCode && city) {
+      const address = `${street} ${houseNumber}, ${postalCode} ${city}`;
+      const { lat, lng } = await getGeoData(address);
+      body.lat = lat;
+      body.lng = lng;
+    }
     const customer = await db.CrmCustomer.create(body);
 
     //associate customer with user
     await customer.addUser(req.user.id);
 
     //set default status to new
-    const status = await db.CrmStatuses.findOne({ where: { iconName: "new" } });
+    const status = await db.CrmStatuses.findOne({
+      where: { iconName: "new" },
+    });
     await customer.setStatus(status);
 
-    return res.status(201).json(customer);
+    //get CrmActionHistory, CrmStatuses and User associations
+    const customerWithAssociations = await db.CrmCustomer.findOne({
+      where: { id: customer.id },
+      include: [
+        {
+          model: db.CrmActionHistory,
+          as: "actionHistory",
+        },
+        {
+          model: db.CrmStatuses,
+          as: "status",
+        },
+        {
+          model: db.User,
+          as: "users", // Alias für die User-Assoziation angeben
+          through: { attributes: [] },
+        },
+      ],
+    });
+
+    return res.status(201).json(customerWithAssociations);
   } catch (error) {
     return res
       .status(500)
@@ -48,6 +73,13 @@ exports.findAllCustomers = async (req, res) => {
         },
         {
           model: db.CrmStatuses,
+          include: [
+            {
+              model: db.Media,
+              attributes: ["id", "name", "fileSize", "fileType", "url"],
+              as: "media",
+            },
+          ],
           as: "status",
         },
         {
@@ -75,6 +107,13 @@ exports.findOneCustomer = async (req, res) => {
         },
         {
           model: db.CrmStatuses,
+          include: [
+            {
+              model: db.Media,
+              attributes: ["id", "name", "fileSize", "fileType", "url"],
+              as: "media",
+            },
+          ],
           as: "status",
         },
         {
@@ -119,7 +158,7 @@ exports.updateCustomer = async (req, res) => {
       const address = `${updatedData.street} ${updatedData.houseNumber}, ${updatedData.postalCode} ${updatedData.city}`;
       const { lat, lng } = await getGeoData(address);
       updatedData.lat = lat;
-      updatedData.lng;
+      updatedData.lng = lng;
     }
 
     // Aktualisiere die Daten
@@ -128,7 +167,24 @@ exports.updateCustomer = async (req, res) => {
     });
 
     if (updated) {
-      const updatedCustomer = await db.CrmCustomer.findOne({ where: { id } });
+      const updatedCustomer = await db.CrmCustomer.findOne({
+        where: { id },
+        include: [
+          {
+            model: db.CrmActionHistory,
+            as: "actionHistory",
+          },
+          {
+            model: db.CrmStatuses,
+            as: "status",
+          },
+          {
+            model: db.User,
+            as: "users", // Alias für die User-Assoziation angeben
+            through: { attributes: [] },
+          },
+        ],
+      });
       return res.status(200).json(updatedCustomer);
     } else {
       throw new Error("Update failed");
