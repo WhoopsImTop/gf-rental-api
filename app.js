@@ -18,6 +18,7 @@ const app = express();
 // Middleware
 app.use(bodyParser.json());
 app.use(cors());
+app.options('*', cors());
 
 //make public folder static
 app.use("/public", express.static("public"));
