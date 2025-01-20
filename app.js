@@ -29,10 +29,6 @@ app.options('*', cors(corsOptions));
 //make public folder static
 app.use('/public', cors(corsOptions), express.static('public'));
 
-app.use((req, res, next) => {
-  res.status(404).json({ error: 'Route nicht gefunden!' });
-});
-
 // Allgemeine Fehlerbehandlung
 app.use((err, req, res, next) => {
   console.error(err.stack);
