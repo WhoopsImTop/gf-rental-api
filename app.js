@@ -17,11 +17,27 @@ const app = express();
 
 // Middleware
 app.use(bodyParser.json());
-app.use(cors());
-app.options('*', cors());
+const corsOptions = {
+  origin: '*', // Erlaube alle Ursprünge
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Erlaubte HTTP-Methoden
+  allowedHeaders: ['Content-Type', 'Authorization'], // Erlaubte Header
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); 
 
 //make public folder static
-app.use("/public", express.static("public"));
+app.use('/public', cors(corsOptions), express.static('public'));
+
+app.use((req, res, next) => {
+  res.status(404).json({ error: 'Route nicht gefunden!' });
+});
+
+// Allgemeine Fehlerbehandlung
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Interner Serverfehler!' });
+});
 
 // Route zum Testen
 app.get("/", (req, res) => {
