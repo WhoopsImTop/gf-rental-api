@@ -23,7 +23,13 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
 };
 
-app.all("*", cors(corsOptions));
+app.use(cors(corsOptions));
+
+//header middleware for all Requests
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  next(); 
+});
 
 //make public folder static
 app.use(express.static("public"));
