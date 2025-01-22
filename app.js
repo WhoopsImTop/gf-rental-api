@@ -15,18 +15,19 @@ const AuthMiddleware = require("./middleware/authMiddleware");
 const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
 
-// Middleware
-app.use(
-  cors({
-    origin: "*", // Erlaube alle Ursprünge
-    methods: ["GET", "PUT", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
-  })
-);
-app.use(bodyParser.json());
+const corsOptions = {
+  origin: "*", // Erlaube alle Ursprünge
+  methods: ["GET", "POST", "PUT", "DELETE"], // Erlaubte HTTP-Methoden
+  allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
+};
 
-//make public folder static
-app.use('/public', express.static('public'));
+// Middleware
+// Wende CORS auf statische Dateien an
+app.use("/public", cors(corsOptions), express.static("public"));
+
+// Weitere Routen und Middleware
+app.use(cors(corsOptions)); // Gilt für die anderen Routen
+app.use(bodyParser.json());
 
 // Allgemeine Fehlerbehandlung
 app.use((err, req, res, next) => {
