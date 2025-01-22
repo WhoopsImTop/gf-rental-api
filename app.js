@@ -24,10 +24,9 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); 
 
 //make public folder static
-app.use('/public', cors(corsOptions), express.static('public'));
+app.use('/public', express.static('public'));
 
 // Allgemeine Fehlerbehandlung
 app.use((err, req, res, next) => {
