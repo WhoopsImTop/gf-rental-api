@@ -18,20 +18,20 @@ const app = express();
 // Middleware
 app.use(bodyParser.json());
 const corsOptions = {
-  origin: '*', // Erlaube alle Ursprünge
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Erlaubte HTTP-Methoden
-  allowedHeaders: ['Content-Type', 'Authorization'], // Erlaubte Header
+  origin: "*", // Erlaube alle Ursprünge
+  methods: ["GET", "PUT", "POST", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
 };
 
-app.use(cors(corsOptions));
+app.all("*", cors(corsOptions));
 
 //make public folder static
-app.use(express.static('public'));
+app.use(express.static("public"));
 
 // Allgemeine Fehlerbehandlung
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ error: 'Interner Serverfehler!' });
+  res.status(500).json({ error: "Interner Serverfehler!" });
 });
 
 // Route zum Testen
