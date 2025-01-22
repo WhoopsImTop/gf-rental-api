@@ -16,22 +16,17 @@ const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
 
 // Middleware
+app.use(
+  cors({
+    origin: "*", // Erlaube alle Ursprünge
+    methods: ["GET", "PUT", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
+  })
+);
 app.use(bodyParser.json());
-const corsOptions = {
-  methods: ["GET", "PUT", "POST", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
-};
-
-app.use(cors(corsOptions));
-
-//header middleware for all Requests
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  next(); 
-});
 
 //make public folder static
-app.use(express.static("public"));
+app.use('/public', express.static('public'));
 
 // Allgemeine Fehlerbehandlung
 app.use((err, req, res, next) => {
