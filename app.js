@@ -18,7 +18,6 @@ const app = express();
 // Middleware
 app.use(bodyParser.json());
 const corsOptions = {
-  origin: "*", // Erlaube alle Ursprünge
   methods: ["GET", "PUT", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
 };
