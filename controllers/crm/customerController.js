@@ -69,6 +69,7 @@ exports.findAllCustomers = async (req, res) => {
       include: [
         {
           model: db.CrmActionHistory,
+          order: [['createdAt', 'DESC']],
           as: "actionHistory",
         },
         {
