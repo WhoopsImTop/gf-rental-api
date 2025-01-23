@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { createCustomer, findAllCustomers, findOneCustomer, updateCustomer, setCustomerAction, deleteCustomer, assignUserToCustomer } = require("../../controllers/crm/customerController");
+const { createCustomer, findAllCustomers, findOneCustomer, updateCustomer, setCustomerAction, deleteCustomer, assignUserToCustomer, removeUserFromCustomer } = require("../../controllers/crm/customerController");
 
 router.post("/", createCustomer);
 router.get("/", findAllCustomers);
