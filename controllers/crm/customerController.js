@@ -305,6 +305,29 @@ exports.assignUserToCustomer = async (req, res) => {
   }
 };
 
+exports.removeUserFromCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    const customer = await db.CrmCustomer.findOne({ where: { id } });
+    if (!customer) {
+      throw new Error("Customer not found");
+    }
+
+    const user = await db.User.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    await customer.removeUser(user);
+
+    return res.status(200).json(customer);
+  } catch (error) {
+    return res.status(500).send({ error: error.message });
+  }
+};
+
 exports.deleteCustomer = async (req, res) => {
   try {
     const { id } = req.params;

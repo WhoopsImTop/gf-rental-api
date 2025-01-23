@@ -7,6 +7,7 @@ router.get("/", findAllCustomers);
 router.get("/:id", findOneCustomer);
 router.patch("/:id", updateCustomer);
 router.patch("/:id/assign", assignUserToCustomer);
+router.patch("/:id/unassign", removeUserFromCustomer);
 router.patch("/:id/action", setCustomerAction);
 router.delete("/:id", deleteCustomer);
 
