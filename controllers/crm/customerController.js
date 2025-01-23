@@ -66,7 +66,7 @@ exports.createCustomer = async (req, res) => {
 exports.findAllCustomers = async (req, res) => {
   try {
     const customers = await db.CrmCustomer.findAll({
-      order: [[db.CrmActionHistory, "createdAt", "DESC"]],
+      order: [["actionHistory", "createdAt", "DESC"]],
       include: [
         {
           model: db.CrmActionHistory,
