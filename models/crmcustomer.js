@@ -38,6 +38,13 @@ module.exports = (sequelize, DataTypes) => {
         "Interessent",
         "Import"
       ),
+      priority: DataTypes.ENUM("low", "medium", "high"),
+      sellingStrategy: DataTypes.ENUM(
+        "Offen",
+        "Bestandskundenentwicklung",
+        "Bestandskundenpfelge",
+        "Key-Account"
+      ),
       email: DataTypes.TEXT,
       altEmail: DataTypes.TEXT,
       phone: DataTypes.TEXT,
