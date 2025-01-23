@@ -66,11 +66,12 @@ exports.createCustomer = async (req, res) => {
 exports.findAllCustomers = async (req, res) => {
   try {
     const customers = await db.CrmCustomer.findAll({
+      order: [[db.CrmActionHistory, "createdAt", "DESC"]],
       include: [
-        /* {
+        {
           model: db.CrmActionHistory,
           as: "actionHistory",
-        }, */
+        },
         {
           model: db.CrmStatuses,
           include: [
@@ -88,7 +89,6 @@ exports.findAllCustomers = async (req, res) => {
           through: { attributes: [] },
         },
       ],
-      order: [{ model: db.CrmActionHistory, as: 'actionHistory' },["createdAt", "DESC"]],
     });
     return res.status(200).json(customers);
   } catch (error) {

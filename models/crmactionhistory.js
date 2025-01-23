@@ -33,11 +33,5 @@ module.exports = (sequelize, DataTypes) => {
       modelName: "CrmActionHistory",
     }
   );
-  CrmActionHistory.afterFind((crmActionHistory, options) => {
-    //order by date
-    crmActionHistory.sort((a, b) => {
-      return new Date(b.createdAt) - new Date(a.createdAt);
-    });
-  });
   return CrmActionHistory;
 };
