@@ -148,6 +148,24 @@ exports.updateCustomer = async (req, res) => {
     // Kombiniere die bestehenden Daten mit den neuen
     const updatedData = { ...customer.toJSON(), ...req.body };
 
+    //check if status has changed
+    const statusChanged = updatedData.statusId !== customer.statusId;
+    if (statusChanged) {
+      //create action history for status change
+      const status = await db.CrmStatuses.findOne({
+        where: { id: updatedData.statusId },
+      });
+      const title = `Status wurde von ${req.user.firstName} ${req.user.lastName} auf ${status.name} geändert`;
+      const actionHistory = await db.CrmActionHistory.create({
+        crmCustomerId: id,
+        action: "Änderung",
+        title,
+        userId: req.user.id,
+      });
+      //relate the action History to the customer
+      await customer.addActionHistory(actionHistory);
+    }
+
     //check if address has changed
     const addressChanged =
       updatedData.street !== customer.street ||
