@@ -196,6 +196,13 @@ exports.updateCustomer = async (req, res) => {
           {
             model: db.CrmStatuses,
             as: "status",
+            include: [
+              {
+                model: db.Media,
+                attributes: ["id", "name", "fileSize", "fileType", "url"],
+                as: "media",
+              },
+            ],
           },
           {
             model: db.User,
