@@ -299,7 +299,7 @@ exports.assignUserToCustomer = async (req, res) => {
 
     await customer.addUser(user);
 
-    return res.status(200).json(customer);
+    return res.status(200).json(user);
   } catch (error) {
     return res.status(500).send({ error: error.message });
   }
@@ -322,7 +322,7 @@ exports.removeUserFromCustomer = async (req, res) => {
 
     await customer.removeUser(user);
 
-    return res.status(200).json(customer);
+    return res.status(200).json(user);
   } catch (error) {
     return res.status(500).send({ error: error.message });
   }
