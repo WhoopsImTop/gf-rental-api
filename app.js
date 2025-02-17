@@ -8,6 +8,7 @@ const carAboRoute = require("./routes/carAboRoute");
 const crmCustomerRoute = require("./routes/crm/customerRoute");
 const statusRoute = require("./routes/crm/statusRoute");
 const userRoute = require("./routes/general/userRoute");
+const reviewRoute = require("./routes/website/reviewRoute");
 
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
 const AuthMiddleware = require("./middleware/authMiddleware");
@@ -45,9 +46,12 @@ app.use("/api/auth", AuthentificationRoute);
 app.use("/api/users", AuthMiddleware, userRoute);
 app.use("/api/car-abos", carAboRoute);
 
-//CRM-Routes
+//CRM-Routen
 app.use("/api/crm/customers", AuthMiddleware, crmCustomerRoute);
 app.use("/api/crm/status", statusRoute);
+
+//Website-Routen (öffentlich)
+app.use("/api/reviews", reviewRoute);
 
 // Server starten und Datenbankverbindung prüfen
 app.listen(serverPort, async () => {
