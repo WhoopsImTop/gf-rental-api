@@ -27,24 +27,24 @@ module.exports = (sequelize, DataTypes) => {
 
   Review.beforeCreate((review, options) => {
     if (
-      Review.dataValues["email"] &&
-      !isEncrypted(Review.dataValues["email"])
+      review.dataValues["email"] &&
+      !isEncrypted(review.dataValues["email"])
     ) {
-      Review.dataValues["email"] = encrypt(Review.dataValues["email"]);
+      review.dataValues["email"] = encrypt(review.dataValues["email"]);
     }
   });
 
-  Review.afterFind((Review, options) => {
-    if (Review) {
-      if (Array.isArray(Review)) {
-        Review.forEach((record) => {
+  Review.afterFind((review, options) => {
+    if (review) {
+      if (Array.isArray(review)) {
+        review.forEach((record) => {
           if (record.dataValues.email && isEncrypted(record.dataValues.email)) {
             record.dataValues.email = decrypt(record.dataValues.email);
           }
         });
       } else {
-        if (Review.dataValues.email && isEncrypted(Review.dataValues.email)) {
-          Review.dataValues.email = decrypt(Review.dataValues.email);
+        if (review.dataValues.email && isEncrypted(review.dataValues.email)) {
+          review.dataValues.email = decrypt(review.dataValues.email);
         }
       }
     }
