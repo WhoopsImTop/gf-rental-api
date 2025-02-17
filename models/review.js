@@ -2,7 +2,7 @@
 const { Model } = require("sequelize");
 const { encrypt, isEncrypted, decrypt } = require("../services/encryption");
 module.exports = (sequelize, DataTypes) => {
-  class reviReviewew extends Model {
+  class Review extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
