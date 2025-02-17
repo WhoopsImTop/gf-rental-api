@@ -2,7 +2,7 @@
 const { Model } = require("sequelize");
 const { encrypt, isEncrypted, decrypt } = require("../services/encryption");
 module.exports = (sequelize, DataTypes) => {
-  class review extends Model {
+  class reviReviewew extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
       // define association here
     }
   }
-  review.init(
+  Review.init(
     {
       rating: DataTypes.INTEGER,
       email: DataTypes.STRING,
@@ -21,33 +21,33 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       sequelize,
-      modelName: "review",
+      modelName: "Review",
     }
   );
 
-  review.beforeCreate((review, options) => {
+  Review.beforeCreate((review, options) => {
     if (
-      review.dataValues["email"] &&
-      !isEncrypted(review.dataValues["email"])
+      Review.dataValues["email"] &&
+      !isEncrypted(Review.dataValues["email"])
     ) {
-      review.dataValues["email"] = encrypt(review.dataValues["email"]);
+      Review.dataValues["email"] = encrypt(Review.dataValues["email"]);
     }
   });
 
-  review.afterFind((review, options) => {
-    if (review) {
-      if (Array.isArray(review)) {
-        review.forEach((record) => {
+  Review.afterFind((Review, options) => {
+    if (Review) {
+      if (Array.isArray(Review)) {
+        Review.forEach((record) => {
           if (record.dataValues.email && isEncrypted(record.dataValues.email)) {
             record.dataValues.email = decrypt(record.dataValues.email);
           }
         });
       } else {
-        if (review.dataValues.email && isEncrypted(review.dataValues.email)) {
-          review.dataValues.email = decrypt(review.dataValues.email);
+        if (Review.dataValues.email && isEncrypted(Review.dataValues.email)) {
+          Review.dataValues.email = decrypt(Review.dataValues.email);
         }
       }
     }
   });
-  return review;
+  return Review;
 };
