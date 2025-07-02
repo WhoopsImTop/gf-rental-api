@@ -14,6 +14,12 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "mediaId",
         otherKey: "carAboId",
       });
+      Media.belongsToMany(models.CarsharingCar, {
+        through: "carsharingCarsImages",
+        foreignKey: "mediaId",
+        otherKey: "carId",
+        as: "carsharingCars"
+      });
       Media.belongsTo(models.CrmStatuses, {
         foreignKey: "statusId", // Spalte in der Media-Tabelle
         targetKey: "id", // Spalte in der CrmStatuses-Tabelle

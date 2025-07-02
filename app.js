@@ -5,6 +5,8 @@ const { sequelize } = require("./models");
 
 //import routes
 const carAboRoute = require("./routes/carAboRoute");
+const carsharingCarRoute = require("./routes/carsharingCarRoute");
+const uploadRoute = require("./routes/uploadRoute");
 const crmCustomerRoute = require("./routes/crm/customerRoute");
 const statusRoute = require("./routes/crm/statusRoute");
 const userRoute = require("./routes/general/userRoute");
@@ -45,6 +47,8 @@ app.get("/", (req, res) => {
 app.use("/api/auth", AuthentificationRoute);
 app.use("/api/users", AuthMiddleware, userRoute);
 app.use("/api/car-abos", carAboRoute);
+app.use("/api/carsharing-cars", carsharingCarRoute);
+app.use("/api/uploads", uploadRoute);
 
 //CRM-Routen
 app.use("/api/crm/customers", AuthMiddleware, crmCustomerRoute);
