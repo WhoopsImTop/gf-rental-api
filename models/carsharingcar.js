@@ -42,11 +42,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
       technicalData: {
-        type: DataTypes.JSONB,
+        type: DataTypes.JSON,
         allowNull: true,
       },
       weightAndPayload: {
-        type: DataTypes.JSONB,
+        type: DataTypes.JSON,
         allowNull: true,
       },
     },

@@ -28,10 +28,10 @@ module.exports = {
         type: Sequelize.TEXT,
       },
       technicalData: {
-        type: Sequelize.JSONB,
+        type: Sequelize.JSON,
       },
       weightAndPayload: {
-        type: Sequelize.JSONB,
+        type: Sequelize.JSON,
       },
       createdAt: {
         allowNull: false,
