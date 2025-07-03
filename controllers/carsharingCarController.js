@@ -4,6 +4,18 @@ const db = require("../models");
 exports.createCarsharingCar = async (req, res) => {
   try {
     const carsharingCar = await db.CarsharingCar.create(req.body);
+    //relate each id in images array to the carsharingCar
+    if (req.body.images && req.body.images.length > 0) {
+      const images = await db.Media.findAll({
+        where: {
+          id: {
+            [sequelize.Op.in]: req.body.images,
+          },
+        },
+      });
+      // Associate images with the carsharingCar
+      await carsharingCar.setImages(images);
+    }
     return res.status(201).json(carsharingCar);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -58,6 +70,20 @@ exports.updateCarsharingCar = async (req, res) => {
     const [updated] = await db.CarsharingCar.update(req.body, {
       where: { id: id },
     });
+
+    //relate each id in images array to the carsharingCar
+    if (req.body.images && req.body.images.length > 0) {
+      const images = await db.Media.findAll({
+        where: {
+          id: {
+            [sequelize.Op.in]: req.body.images,
+          },
+        },
+      });
+      // Associate images with the carsharingCar
+      const carsharingCar = await db.CarsharingCar.findByPk(id);
+      await carsharingCar.setImages(images);
+    }
     if (updated) {
       const updatedCarsharingCar = await db.CarsharingCar.findOne({ 
         where: { id: id },
