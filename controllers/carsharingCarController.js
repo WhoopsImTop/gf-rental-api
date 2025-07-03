@@ -100,7 +100,7 @@ exports.updateCarsharingCar = async (req, res) => {
         order: [
           [
             { model: db.Media, as: "images" },
-            "CarsharingCarsImages",
+            "CarsharingCarsImages", // <- Sequelize erzeugt dies jetzt korrekt
             "order",
             "ASC",
           ],
