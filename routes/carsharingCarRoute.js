@@ -14,7 +14,7 @@ const {
 router.post("/", createCarsharingCar);
 router.get("/", findAllCarsharingCars);
 router.get("/:id", findOneCarsharingCar);
-router.put("/:id", updateCarsharingCar);
+router.patch("/:id", updateCarsharingCar);
 router.delete("/:id", deleteCarsharingCar);
 
 // Image linking routes (link existing media to car)
