@@ -94,15 +94,12 @@ exports.updateCarsharingCar = async (req, res) => {
           {
             model: db.Media,
             as: "images",
-            through: {
-              attributes: ["order"],
-            },
           },
         ],
         order: [
           [
             { model: db.Media, as: "images" },
-            db.CarsharingCarImage,
+            "CarsharingCarImage",
             "order",
             "ASC",
           ],
