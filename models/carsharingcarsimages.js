@@ -12,11 +12,11 @@ module.exports = (sequelize, DataTypes) => {
       // define association here
       CarsharingCarsImages.belongsTo(models.CarsharingCar, {
         foreignKey: "carId",
-        as: "car"
+        as: "car",
       });
       CarsharingCarsImages.belongsTo(models.Media, {
         foreignKey: "mediaId",
-        as: "media"
+        as: "media",
       });
     }
   }
@@ -38,6 +38,11 @@ module.exports = (sequelize, DataTypes) => {
           model: "Media",
           key: "id",
         },
+      },
+      order: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: 0, // Default order value
       },
     },
     {

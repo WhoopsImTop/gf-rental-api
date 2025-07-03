@@ -68,34 +68,44 @@ exports.updateCarsharingCar = async (req, res) => {
   try {
     const { id } = req.params;
     const [updated] = await db.CarsharingCar.update(req.body, {
-      where: { id: id },
+      where: { id },
     });
 
     const carsharingCar = await db.CarsharingCar.findByPk(id);
-    await carsharingCar.setImages([]); // Remove all associations
 
-    //relate each id in images array to the carsharingCar
+    // Alle Verknüpfungen löschen
+    await carsharingCar.setImages([]);
+
     if (req.body.images && req.body.images.length > 0) {
-      const images = await db.Media.findAll({
-        where: {
-          id: {
-            [sequelize.Op.in]: req.body.images,
-          },
-        },
-      });
-      // Associate images with the carsharingCar
-      await carsharingCar.setImages(images);
+      for (let i = 0; i < req.body.images.length; i++) {
+        const imageId = req.body.images[i];
+        const image = await db.Media.findByPk(imageId);
+        if (image) {
+          // Reihenfolge beim Verknüpfen mitgeben
+          await carsharingCar.addImage(image, { through: { order: i } });
+        }
+      }
     }
 
     if (updated) {
       const updatedCarsharingCar = await db.CarsharingCar.findOne({
-        where: { id: id },
+        where: { id },
         include: [
           {
             model: db.Media,
             as: "images",
-            through: { attributes: [] },
+            through: {
+              attributes: ["order"],
+            },
           },
+        ],
+        order: [
+          [
+            { model: db.Media, as: "images" },
+            db.CarsharingCarImage,
+            "order",
+            "ASC",
+          ],
         ],
       });
       return res.status(200).json(updatedCarsharingCar);
