@@ -100,12 +100,13 @@ exports.updateCarsharingCar = async (req, res) => {
         order: [
           [
             { model: db.Media, as: "images" },
-            "CarsharingCarImages",
+            "CarsharingCarsImages",
             "order",
             "ASC",
           ],
         ],
       });
+
       return res.status(200).json(updatedCarsharingCar);
     } else {
       throw new Error("CarsharingCar not found");
