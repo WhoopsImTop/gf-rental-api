@@ -71,6 +71,8 @@ exports.updateCarsharingCar = async (req, res) => {
       where: { id: id },
     });
 
+    await carsharingCar.setImages([]); // Remove all associations
+
     //relate each id in images array to the carsharingCar
     if (req.body.images && req.body.images.length > 0) {
       const images = await db.Media.findAll({
@@ -84,8 +86,9 @@ exports.updateCarsharingCar = async (req, res) => {
       const carsharingCar = await db.CarsharingCar.findByPk(id);
       await carsharingCar.setImages(images);
     }
+
     if (updated) {
-      const updatedCarsharingCar = await db.CarsharingCar.findOne({ 
+      const updatedCarsharingCar = await db.CarsharingCar.findOne({
         where: { id: id },
         include: [
           {
@@ -123,23 +126,25 @@ exports.deleteCarsharingCar = async (req, res) => {
 exports.addImageToCarsharingCar = async (req, res) => {
   try {
     const { carId, mediaId } = req.body;
-    
+
     // Check if car exists
     const car = await db.CarsharingCar.findByPk(carId);
     if (!car) {
       return res.status(404).json({ error: "CarsharingCar not found" });
     }
-    
+
     // Check if media exists
     const media = await db.Media.findByPk(mediaId);
     if (!media) {
       return res.status(404).json({ error: "Media not found" });
     }
-    
+
     // Add association
     await car.addImages(media);
-    
-    return res.status(200).json({ message: "Image added to CarsharingCar successfully" });
+
+    return res
+      .status(200)
+      .json({ message: "Image added to CarsharingCar successfully" });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -148,23 +153,25 @@ exports.addImageToCarsharingCar = async (req, res) => {
 exports.removeImageFromCarsharingCar = async (req, res) => {
   try {
     const { carId, mediaId } = req.params;
-    
+
     // Check if car exists
     const car = await db.CarsharingCar.findByPk(carId);
     if (!car) {
       return res.status(404).json({ error: "CarsharingCar not found" });
     }
-    
+
     // Check if media exists
     const media = await db.Media.findByPk(mediaId);
     if (!media) {
       return res.status(404).json({ error: "Media not found" });
     }
-    
+
     // Remove association
     await car.removeImages(media);
-    
-    return res.status(200).json({ message: "Image removed from CarsharingCar successfully" });
+
+    return res
+      .status(200)
+      .json({ message: "Image removed from CarsharingCar successfully" });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
