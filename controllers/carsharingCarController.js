@@ -71,6 +71,7 @@ exports.updateCarsharingCar = async (req, res) => {
       where: { id: id },
     });
 
+    const carsharingCar = await db.CarsharingCar.findByPk(id);
     await carsharingCar.setImages([]); // Remove all associations
 
     //relate each id in images array to the carsharingCar
@@ -83,7 +84,6 @@ exports.updateCarsharingCar = async (req, res) => {
         },
       });
       // Associate images with the carsharingCar
-      const carsharingCar = await db.CarsharingCar.findByPk(id);
       await carsharingCar.setImages(images);
     }
 
