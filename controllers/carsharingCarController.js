@@ -97,14 +97,6 @@ exports.updateCarsharingCar = async (req, res) => {
             through: { attributes: ["order"] },
           },
         ],
-        order: [
-          [
-            { model: db.Media, as: "images" },
-            "CarsharingCarsImages", // <- Sequelize erzeugt dies jetzt korrekt
-            "order",
-            "ASC",
-          ],
-        ],
       });
 
       return res.status(200).json(updatedCarsharingCar);
