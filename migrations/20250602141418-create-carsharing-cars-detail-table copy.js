@@ -10,7 +10,7 @@ module.exports = {
         type: Sequelize.INTEGER,
       },
       name: {
-        type: Sequelize.INTEGER,
+        type: Sequelize.STRING,
       },
       subline: {
         type: Sequelize.TEXT,
