@@ -12,6 +12,12 @@ module.exports = {
       availableFrom: {
         type: Sequelize.DATE,
       },
+      airConditioning: {
+        type: Sequelize.STRING,
+      },
+      airbags: {
+        type: Sequelize.STRING,
+      },
       needToBeOrdered: {
         type: Sequelize.BOOLEAN,
         defaultValue: false,
@@ -22,16 +28,13 @@ module.exports = {
       displayName: {
         type: Sequelize.STRING,
       },
-      colors: {
-        type: Sequelize.JSON,
-      },
       brandId: {
         type: Sequelize.INTEGER,
       },
       cartype: {
         type: Sequelize.STRING,
       },
-      co2emission: {
+      co2Emission: {
         type: Sequelize.INTEGER,
       },
       configurationFile: {
@@ -58,6 +61,9 @@ module.exports = {
       efficiencyClass: {
         type: Sequelize.STRING,
       },
+      environmentalBadge: {
+        type: Sequelize.STRING,
+      },
       energyClassFile: {
         type: Sequelize.STRING,
       },
@@ -80,11 +86,27 @@ module.exports = {
         type: Sequelize.BOOLEAN,
         defaultValue: true,
       },
+      internalId: {
+        type: Sequelize.INTEGER,
+      },
+      interiorDecoration: {
+        type: Sequelize.STRING,
+      },
       model: {
         type: Sequelize.STRING,
       },
+      milage: {
+        type: Sequelize.INTEGER,
+      },
       modelYear: {
         type: Sequelize.INTEGER,
+      },
+      vin: {
+        type: Sequelize.STRING,
+      },
+      status: {
+        type: Sequelize.ENUM("available", "reserved", "unavailable"),
+        defaultValue: "available",
       },
       offerType: {
         type: Sequelize.ENUM("subscription", "purchase"),
@@ -92,14 +114,11 @@ module.exports = {
       mediaId: {
         type: Sequelize.INTEGER,
       },
+      parkingAids: {
+        type: Sequelize.STRING,
+      },
       power: {
         type: Sequelize.INTEGER,
-      },
-      price: {
-        type: Sequelize.JSON,
-      },
-      extraMilage: {
-        type: Sequelize.JSON,
       },
       productMarketingLabel: {
         type: Sequelize.STRING,
@@ -112,12 +131,6 @@ module.exports = {
       },
       tires: {
         type: Sequelize.STRING,
-      },
-      downpayment: {
-        type: Sequelize.INTEGER,
-      },
-      downpaymentDiscount: {
-        type: Sequelize.INTEGER,
       },
       sellerId: {
         type: Sequelize.INTEGER,

@@ -1,8 +1,9 @@
 "use strict";
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable("CarAboMedia", {
+    await queryInterface.createTable("CarAboPrices", {
       id: {
         allowNull: false,
         autoIncrement: true,
@@ -16,18 +17,23 @@ module.exports = {
           model: "CarAbos",
           key: "id",
         },
-        onUpdate: "CASCADE",
         onDelete: "CASCADE",
       },
-      mediaId: {
+      durationMonths: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        references: {
-          model: "Media",
-          key: "id",
-        },
-        onUpdate: "CASCADE",
-        onDelete: "CASCADE",
+      },
+      mileageKm: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+      },
+      priceWithDeposit: {
+        type: Sequelize.DECIMAL(10, 2),
+        allowNull: false,
+      },
+      priceNoDeposit: {
+        type: Sequelize.DECIMAL(10, 2),
+        allowNull: true,
       },
       createdAt: {
         allowNull: false,
@@ -39,7 +45,9 @@ module.exports = {
       },
     });
   },
-  async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable("CarAboMedia");
+
+  async down(queryInterface) {
+    await queryInterface.dropTable("CarAboPrices");
   },
 };
+

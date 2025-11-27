@@ -1,8 +1,9 @@
 "use strict";
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable("CarAboMedia", {
+    await queryInterface.createTable("CarAboColors", {
       id: {
         allowNull: false,
         autoIncrement: true,
@@ -16,18 +17,20 @@ module.exports = {
           model: "CarAbos",
           key: "id",
         },
-        onUpdate: "CASCADE",
         onDelete: "CASCADE",
       },
-      mediaId: {
-        type: Sequelize.INTEGER,
+      colorName: {
+        type: Sequelize.STRING,
         allowNull: false,
-        references: {
-          model: "Media",
-          key: "id",
-        },
-        onUpdate: "CASCADE",
-        onDelete: "CASCADE",
+      },
+      hexCode: {
+        type: Sequelize.STRING(7),
+      },
+      vehicleImageUrl: {
+        type: Sequelize.STRING,
+      },
+      additionalImages: {
+        type: Sequelize.JSON,
       },
       createdAt: {
         allowNull: false,
@@ -39,7 +42,9 @@ module.exports = {
       },
     });
   },
-  async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable("CarAboMedia");
+
+  async down(queryInterface) {
+    await queryInterface.dropTable("CarAboColors");
   },
 };
+

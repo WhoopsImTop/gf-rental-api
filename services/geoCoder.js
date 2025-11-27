@@ -1,7 +1,8 @@
 const hereApiKey = process.env.HERE_API_KEY;
 
 if (!hereApiKey) {
-  throw new Error("HERE_API_KEY not set");
+  console.log('GEOCODING-SERVICE: NOT AVAILABLE');
+  return;
 }
 
 const axios = require("axios");

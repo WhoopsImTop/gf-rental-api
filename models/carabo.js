@@ -17,17 +17,28 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "mediaId",
         otherKey: "carAboId",
       });
+      CarAbo.hasMany(models.CarAboPrice, {
+        foreignKey: "carAboId",
+        as: "prices",
+        onDelete: "CASCADE",
+      });
+      CarAbo.hasMany(models.CarAboColor, {
+        foreignKey: "carAboId",
+        as: "colors",
+        onDelete: "CASCADE",
+      });
     }
   }
   CarAbo.init(
     {
       availableFrom: DataTypes.DATE,
+      airConditioning: DataTypes.STRING,
+      airbags: DataTypes.STRING,
       needToBeOrdered: DataTypes.BOOLEAN,
       availableInDays: DataTypes.INTEGER,
-      colors: DataTypes.JSON,
       brandId: DataTypes.INTEGER,
       cartype: DataTypes.STRING,
-      co2emission: DataTypes.INTEGER,
+      co2Emission: DataTypes.INTEGER,
       configurationFile: DataTypes.STRING,
       configDrive: DataTypes.STRING,
       consumption: DataTypes.INTEGER,
@@ -37,6 +48,7 @@ module.exports = (sequelize, DataTypes) => {
       displayName: DataTypes.STRING,
       doors: DataTypes.INTEGER,
       efficiencyClass: DataTypes.STRING,
+      environmentalBadge: DataTypes.STRING,
       energyClassFile: DataTypes.STRING,
       engine: DataTypes.STRING,
       equipment: DataTypes.JSON,
@@ -44,20 +56,23 @@ module.exports = (sequelize, DataTypes) => {
       evRange: DataTypes.INTEGER,
       gearshift: DataTypes.STRING,
       indexable: DataTypes.BOOLEAN,
+      internalId: DataTypes.INTEGER,
+      interiorDecoration: DataTypes.STRING,
       model: DataTypes.STRING,
+      milage: DataTypes.INTEGER,
       modelYear: DataTypes.INTEGER,
+      vin: DataTypes.STRING,
+      status: DataTypes.ENUM("available", "reserved", "unavailable"),
       offerType: DataTypes.ENUM("subscription", "purchase"),
       mediaId: DataTypes.INTEGER,
+      parkingAids: DataTypes.STRING,
       power: DataTypes.INTEGER,
-      price: DataTypes.JSON,
-      extraMilage: DataTypes.JSON,
       productMarketingLabel: DataTypes.STRING,
       discount: DataTypes.INTEGER,
       seats: DataTypes.INTEGER,
       tires: DataTypes.STRING,
-      downpayment: DataTypes.INTEGER,
-      downpaymentDiscount: DataTypes.INTEGER,
       sellerId: DataTypes.INTEGER,
+      contractId: DataTypes.INTEGER,
 
       // Virtual field to calculate `availableFrom`
       calculatedAvailableFrom: {
