@@ -11,12 +11,29 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
-      CarAboMedia.belongsTo(models.CarAbo);
+      CarAboMedia.belongsTo(models.CarAbo, {
+        foreignKey: "carAboId",
+        as: "carAbo",
+      });
+      CarAboMedia.belongsTo(models.Media, {
+        foreignKey: "mediaId",
+        as: "media",
+      });
     }
   }
   CarAboMedia.init({
     carAboId: DataTypes.INTEGER,
-    mediaId: DataTypes.INTEGER
+    mediaId: DataTypes.INTEGER,
+    type: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Type of media: interior, exterior, etc."
+    },
+    sortOrder: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    }
   }, {
     sequelize,
     modelName: 'CarAboMedia',

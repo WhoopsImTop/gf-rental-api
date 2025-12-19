@@ -9,7 +9,10 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
-      CarAbo.belongsTo(models.Seller);
+      CarAbo.belongsTo(models.Seller, {
+        foreignKey: "sellerId",
+        as: "seller",
+      });
       CarAbo.belongsTo(models.Brand);
       CarAbo.belongsTo(models.Contract);
       CarAbo.belongsToMany(models.Media, {
@@ -27,16 +30,17 @@ module.exports = (sequelize, DataTypes) => {
         as: "colors",
         onDelete: "CASCADE",
       });
+      CarAbo.hasMany(models.CarAboMedia, {
+        foreignKey: "carAboId",
+        as: "media",
+        onDelete: "CASCADE",
+      });
     }
   }
   CarAbo.init(
     {
-      availableFrom: DataTypes.DATE,
       airConditioning: DataTypes.STRING,
       airbags: DataTypes.STRING,
-      needToBeOrdered: DataTypes.BOOLEAN,
-      availableInDays: DataTypes.INTEGER,
-      brandId: DataTypes.INTEGER,
       cartype: DataTypes.STRING,
       co2Emission: DataTypes.INTEGER,
       configurationFile: DataTypes.STRING,
@@ -46,17 +50,20 @@ module.exports = (sequelize, DataTypes) => {
       consumptionHighway: DataTypes.INTEGER,
       description: DataTypes.TEXT,
       displayName: DataTypes.STRING,
+      displacement: DataTypes.INTEGER,
+      driveType: DataTypes.STRING,
       doors: DataTypes.INTEGER,
       efficiencyClass: DataTypes.STRING,
       environmentalBadge: DataTypes.STRING,
       energyClassFile: DataTypes.STRING,
+      emissionClass: DataTypes.STRING,
       engine: DataTypes.STRING,
       equipment: DataTypes.JSON,
       equipmentLine: DataTypes.STRING,
       evRange: DataTypes.INTEGER,
+      fuel: DataTypes.STRING,
       gearshift: DataTypes.STRING,
       indexable: DataTypes.BOOLEAN,
-      internalId: DataTypes.INTEGER,
       interiorDecoration: DataTypes.STRING,
       model: DataTypes.STRING,
       milage: DataTypes.INTEGER,
@@ -71,21 +78,10 @@ module.exports = (sequelize, DataTypes) => {
       discount: DataTypes.INTEGER,
       seats: DataTypes.INTEGER,
       tires: DataTypes.STRING,
-      sellerId: DataTypes.INTEGER,
-      contractId: DataTypes.INTEGER,
-
-      // Virtual field to calculate `availableFrom`
-      calculatedAvailableFrom: {
-        type: DataTypes.VIRTUAL,
-        get() {
-          if (this.availableInDays) {
-            const today = new Date();
-            today.setDate(today.getDate() + this.availableInDays);
-            return today;
-          }
-          return null;
-        },
-      },
+      premiumLine: DataTypes.BOOLEAN,
+      vehicleStatus: DataTypes.ENUM("used", "new"),
+      marketingImageDesktop: DataTypes.STRING,
+      marketingImageMobile: DataTypes.STRING,
     },
     {
       sequelize,

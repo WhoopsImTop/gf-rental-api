@@ -74,7 +74,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       passwordHash: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
       },
       role: DataTypes.ENUM("CUSTOMER", "ADMIN", "SELLER"),
       createdAt: {

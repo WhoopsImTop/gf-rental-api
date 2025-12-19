@@ -32,6 +32,22 @@ module.exports = {
       additionalImages: {
         type: Sequelize.JSON,
       },
+      needToBeOrdered: {
+        type: Sequelize.BOOLEAN,
+        defaultValue: false,
+      },
+      availableInDays: {
+        type: Sequelize.INTEGER,
+      },
+      availableFrom: {
+        type: Sequelize.DATE,
+      },
+      isOrdered: {
+        type: Sequelize.BOOLEAN,
+      },
+      internalId: {
+        type: Sequelize.STRING,
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,
@@ -47,4 +63,3 @@ module.exports = {
     await queryInterface.dropTable("CarAboColors");
   },
 };
-

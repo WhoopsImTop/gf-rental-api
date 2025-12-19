@@ -9,21 +9,11 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER,
       },
-      availableFrom: {
-        type: Sequelize.DATE,
-      },
       airConditioning: {
         type: Sequelize.STRING,
       },
       airbags: {
         type: Sequelize.STRING,
-      },
-      needToBeOrdered: {
-        type: Sequelize.BOOLEAN,
-        defaultValue: false,
-      },
-      availableInDays: {
-        type: Sequelize.INTEGER,
       },
       displayName: {
         type: Sequelize.STRING,
@@ -55,10 +45,19 @@ module.exports = {
       description: {
         type: Sequelize.TEXT,
       },
+      displacement: {
+        type: Sequelize.INTEGER,
+      },
+      driveType: {
+        type: Sequelize.STRING,
+      },
       doors: {
         type: Sequelize.INTEGER,
       },
       efficiencyClass: {
+        type: Sequelize.STRING,
+      },
+      emissionClass: {
         type: Sequelize.STRING,
       },
       environmentalBadge: {
@@ -79,15 +78,15 @@ module.exports = {
       evRange: {
         type: Sequelize.INTEGER,
       },
+      fuel: {
+        type: Sequelize.STRING,
+      },
       gearshift: {
         type: Sequelize.STRING,
       },
       indexable: {
         type: Sequelize.BOOLEAN,
         defaultValue: true,
-      },
-      internalId: {
-        type: Sequelize.INTEGER,
       },
       interiorDecoration: {
         type: Sequelize.STRING,
@@ -137,6 +136,13 @@ module.exports = {
       },
       contractId: {
         type: Sequelize.INTEGER,
+      },
+      premiumLine: {
+        type: Sequelize.BOOLEAN,
+        defaultValue: false,
+      },
+      vehicleStatus: {
+        type: Sequelize.ENUM("used", "new"),
       },
       createdAt: {
         allowNull: false,

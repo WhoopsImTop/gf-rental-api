@@ -2,7 +2,21 @@ const db = require("../models");
 
 const carAboIncludes = [
   { model: db.CarAboPrice, as: "prices" },
-  { model: db.CarAboColor, as: "colors" },
+  {
+    model: db.CarAboColor,
+    as: "colors",
+    include: [{ model: db.Media, as: "media" }],
+    where: { isOrdered: false },
+  },
+  {
+    model: db.CarAboMedia,
+    as: "media",
+    include: [{ model: db.Media, as: "media" }],
+  },
+  {
+    model: db.Seller,
+    as: "seller",
+  },
 ];
 
 const replaceChildren = async (Model, items, carAboId, transaction) => {
@@ -18,29 +32,52 @@ const replaceChildren = async (Model, items, carAboId, transaction) => {
 };
 
 exports.createCarAbo = async (req, res) => {
-  const { prices, colors, ...carAboPayload } = req.body;
+  const { prices, colors, media, ...carAboPayload } = req.body;
+
+  // Calculate availableFrom if availableInDays is provided
+  if (carAboPayload.availableInDays && !carAboPayload.availableFrom) {
+    const today = new Date();
+    today.setDate(today.getDate() + parseInt(carAboPayload.availableInDays));
+    carAboPayload.availableFrom = today.toISOString().split("T")[0];
+  } else if (carAboPayload.availableInDays && carAboPayload.availableFrom) {
+    // If both are provided, add days to the provided date
+    const baseDate = new Date(carAboPayload.availableFrom);
+    baseDate.setDate(
+      baseDate.getDate() + parseInt(carAboPayload.availableInDays)
+    );
+    carAboPayload.availableFrom = baseDate.toISOString().split("T")[0];
+  }
 
   try {
-    const createdCarAbo = await db.sequelize.transaction(async (transaction) => {
-      const carAbo = await db.CarAbo.create(carAboPayload, { transaction });
+    const createdCarAbo = await db.sequelize.transaction(
+      async (transaction) => {
+        const carAbo = await db.CarAbo.create(carAboPayload, { transaction });
 
-      if (Array.isArray(prices) && prices.length) {
-        await db.CarAboPrice.bulkCreate(
-          prices.map((price) => ({ ...price, carAboId: carAbo.id })),
-          { transaction }
-        );
+        if (Array.isArray(prices) && prices.length) {
+          await db.CarAboPrice.bulkCreate(
+            prices.map((price) => ({ ...price, carAboId: carAbo.id })),
+            { transaction }
+          );
+        }
+
+        if (Array.isArray(colors) && colors.length) {
+          await db.CarAboColor.bulkCreate(
+            colors.map((color) => ({ ...color, carAboId: carAbo.id })),
+            { transaction }
+          );
+        }
+
+        if (Array.isArray(media) && media.length) {
+          await db.CarAboMedia.bulkCreate(
+            media.map((m) => ({ ...m, carAboId: carAbo.id })),
+            { transaction }
+          );
+        }
+
+        await carAbo.reload({ include: carAboIncludes, transaction });
+        return carAbo;
       }
-
-      if (Array.isArray(colors) && colors.length) {
-        await db.CarAboColor.bulkCreate(
-          colors.map((color) => ({ ...color, carAboId: carAbo.id })),
-          { transaction }
-        );
-      }
-
-      await carAbo.reload({ include: carAboIncludes, transaction });
-      return carAbo;
-    });
+    );
 
     return res.status(201).json(createdCarAbo);
   } catch (error) {
@@ -64,9 +101,43 @@ exports.findAllCarAbos = async (req, res) => {
   }
 };
 
+exports.findAvailableCarAbos = async (req, res) => {
+  try {
+    const carAbos = await db.CarAbo.findAll({
+      include: [
+        { model: db.CarAboPrice, as: "prices" },
+        {
+          model: db.CarAboColor,
+          as: "colors",
+          include: [{ model: db.Media, as: "media" }],
+          where: [{ isOrdered: false }],
+        },
+        {
+          model: db.CarAboMedia,
+          as: "media",
+          include: [{ model: db.Media, as: "media" }],
+        },
+        {
+          model: db.Seller,
+          as: "seller",
+        },
+      ],
+      order: [
+        ["id", "ASC"],
+        [{ model: db.CarAboPrice, as: "prices" }, "durationMonths", "ASC"],
+        [{ model: db.CarAboColor, as: "colors" }, "id", "ASC"],
+      ],
+    });
+    return res.status(200).json(carAbos);
+  } catch (error) {
+    return res.status(500).send({ error: error.message });
+  }
+};
+
 exports.findOneCarAbo = async (req, res) => {
   try {
     const { id } = req.params;
+    const isAvailable = req.query.isAvailable || null;
     const carAbo = await db.CarAbo.findOne({
       where: { id },
       include: carAboIncludes,
@@ -84,33 +155,53 @@ exports.findOneCarAbo = async (req, res) => {
 
 exports.updateCarAbo = async (req, res) => {
   const { id } = req.params;
-  const { prices, colors, ...carAboPayload } = req.body;
+  const { prices, colors, media, ...carAboPayload } = req.body;
+
+  // Calculate availableFrom if availableInDays is provided
+  if (carAboPayload.availableInDays && !carAboPayload.availableFrom) {
+    const today = new Date();
+    today.setDate(today.getDate() + parseInt(carAboPayload.availableInDays));
+    carAboPayload.availableFrom = today.toISOString().split("T")[0];
+  } else if (carAboPayload.availableInDays && carAboPayload.availableFrom) {
+    // If both are provided, add days to the provided date
+    const baseDate = new Date(carAboPayload.availableFrom);
+    baseDate.setDate(
+      baseDate.getDate() + parseInt(carAboPayload.availableInDays)
+    );
+    carAboPayload.availableFrom = baseDate.toISOString().split("T")[0];
+  }
 
   try {
-    const updatedCarAbo = await db.sequelize.transaction(async (transaction) => {
-      const [affected] = await db.CarAbo.update(carAboPayload, {
-        where: { id },
-        transaction,
-      });
-      if (!affected) {
-        throw new Error("CarAbo not found");
-      }
+    const updatedCarAbo = await db.sequelize.transaction(
+      async (transaction) => {
+        const [affected] = await db.CarAbo.update(carAboPayload, {
+          where: { id },
+          transaction,
+        });
+        if (!affected) {
+          throw new Error("CarAbo not found");
+        }
 
-      if (Array.isArray(prices)) {
-        await replaceChildren(db.CarAboPrice, prices, id, transaction);
-      }
+        if (Array.isArray(prices)) {
+          await replaceChildren(db.CarAboPrice, prices, id, transaction);
+        }
 
-      if (Array.isArray(colors)) {
-        await replaceChildren(db.CarAboColor, colors, id, transaction);
-      }
+        if (Array.isArray(colors)) {
+          await replaceChildren(db.CarAboColor, colors, id, transaction);
+        }
 
-      const reloaded = await db.CarAbo.findOne({
-        where: { id },
-        include: carAboIncludes,
-        transaction,
-      });
-      return reloaded;
-    });
+        if (Array.isArray(media)) {
+          await replaceChildren(db.CarAboMedia, media, id, transaction);
+        }
+
+        const reloaded = await db.CarAbo.findOne({
+          where: { id },
+          include: carAboIncludes,
+          transaction,
+        });
+        return reloaded;
+      }
+    );
 
     return res.status(200).json(updatedCarAbo);
   } catch (error) {

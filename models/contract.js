@@ -2,13 +2,7 @@
 const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Contract extends Model {
-    /**
-     * Helper method for defining associations.
-     * This method is not a part of Sequelize lifecycle.
-     * The `models/index` file will call this method automatically.
-     */
     static associate(models) {
-      // define association here
       Contract.belongsTo(models.User);
       Contract.hasOne(models.CarAbo);
     }
@@ -87,6 +81,22 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: false,
       },
       contractFile: {
+        type: DataTypes.STRING,
+      },
+      accountHolderName: {
+        type: DataTypes.STRING,
+      },
+      iban: {
+        type: DataTypes.STRING,
+      },
+      sepaMandate: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
+      sepaMandateDate: {
+        type: DataTypes.DATE,
+      },
+      score: {
         type: DataTypes.STRING,
       },
       createdAt: {
