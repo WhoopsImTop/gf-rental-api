@@ -1,6 +1,6 @@
-const hereApiKey = process.env.HERE_API_KEY;
+const geoCodingApiKey = process.env.GEOCODING_API_KEY;
 
-if (!hereApiKey) {
+if (!geoCodingApiKey) {
   console.log('GEOCODING-SERVICE: NOT AVAILABLE');
   return;
 }
@@ -12,15 +12,15 @@ exports.getGeoData = async (address) => {
   try {
     logger('geoCoder', 'Fetching geodata for address: ' + address);
     const response = await axios.get(
-      `https://geocode.search.hereapi.com/v1/geocode?q=${address}&apiKey=${hereApiKey}`
+      `https://api.geoapify.com/v1/geocode/search?text=${address}&apiKey=${geoCodingApiKey}`
     );
     if (response.status !== 200) {
       throw new Error("Error fetching data");
     }
-    if (response.data.items.length === 0) {
+    if (response.data.features.length === 0) {
       throw new Error("No data found");
     }
-    return response.data.items[0].position;
+    return response.data.features[0].properties;
   } catch (error) {
     logger('error', error.message);
     throw new Error(error);

@@ -19,6 +19,24 @@ const carAboIncludes = [
   },
 ];
 
+const carAboAdminIncludes = [
+  { model: db.CarAboPrice, as: "prices" },
+  {
+    model: db.CarAboColor,
+    as: "colors",
+    include: [{ model: db.Media, as: "media" }],
+  },
+  {
+    model: db.CarAboMedia,
+    as: "media",
+    include: [{ model: db.Media, as: "media" }],
+  },
+  {
+    model: db.Seller,
+    as: "seller",
+  },
+];
+
 const replaceChildren = async (Model, items, carAboId, transaction) => {
   if (!Array.isArray(items)) {
     return;
@@ -29,6 +47,34 @@ const replaceChildren = async (Model, items, carAboId, transaction) => {
   }
   const records = items.map((item) => ({ ...item, carAboId }));
   await Model.bulkCreate(records, { transaction });
+};
+
+const updateChildren = async (Model, items, carAboId, transaction) => {
+  if (!Array.isArray(items)) {
+    return;
+  }
+
+  const existing = await Model.findAll({
+    where: { carAboId },
+    transaction,
+  });
+
+  const existingMap = new Map(existing.map((item) => [item.id, item]));
+
+  for (const item of items) {
+    if (item.id && existingMap.has(item.id)) {
+      const { id, carAboId: _, ...data } = item;
+      await existingMap.get(id).update(data, { transaction });
+      existingMap.delete(id);
+    } else {
+      const { id: _, ...data } = item;
+      await Model.create({ ...data, carAboId }, { transaction });
+    }
+  }
+  
+  for (const leftover of existingMap.values()) {
+    await leftover.destroy({ transaction });
+  }
 };
 
 exports.createCarAbo = async (req, res) => {
@@ -89,6 +135,22 @@ exports.findAllCarAbos = async (req, res) => {
   try {
     const carAbos = await db.CarAbo.findAll({
       include: carAboIncludes,
+      order: [
+        ["id", "ASC"],
+        [{ model: db.CarAboPrice, as: "prices" }, "durationMonths", "ASC"],
+        [{ model: db.CarAboColor, as: "colors" }, "id", "ASC"],
+      ],
+    });
+    return res.status(200).json(carAbos);
+  } catch (error) {
+    return res.status(500).send({ error: error.message });
+  }
+};
+
+exports.findAllCarAboAdmin = async (req, res) => {
+  try {
+    const carAbos = await db.CarAbo.findAll({
+      include: carAboAdminIncludes,
       order: [
         ["id", "ASC"],
         [{ model: db.CarAboPrice, as: "prices" }, "durationMonths", "ASC"],
@@ -182,16 +244,16 @@ exports.updateCarAbo = async (req, res) => {
           throw new Error("CarAbo not found");
         }
 
-        if (Array.isArray(prices)) {
-          await replaceChildren(db.CarAboPrice, prices, id, transaction);
+        if ("prices" in req.body) {
+          await updateChildren(db.CarAboPrice, prices ?? [], id, transaction);
         }
 
-        if (Array.isArray(colors)) {
-          await replaceChildren(db.CarAboColor, colors, id, transaction);
+        if ("colors" in req.body) {
+          await updateChildren(db.CarAboColor, colors ?? [], id, transaction);
         }
 
-        if (Array.isArray(media)) {
-          await replaceChildren(db.CarAboMedia, media, id, transaction);
+        if ("media" in req.body) {
+          await updateChildren(db.CarAboMedia, media ?? [], id, transaction);
         }
 
         const reloaded = await db.CarAbo.findOne({

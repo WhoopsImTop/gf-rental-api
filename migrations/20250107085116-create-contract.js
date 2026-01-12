@@ -64,7 +64,7 @@ module.exports = {
         type: Sequelize.DECIMAL
       },
       familyAndFriendsMembers: {
-        type: Sequelize.JSON
+        type: Sequelize.TEXT
       },
       userId: {
         type: Sequelize.INTEGER

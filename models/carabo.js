@@ -14,7 +14,11 @@ module.exports = (sequelize, DataTypes) => {
         as: "seller",
       });
       CarAbo.belongsTo(models.Brand);
-      CarAbo.belongsTo(models.Contract);
+      CarAbo.hasMany(models.Contract, {
+        foreignKey: "carAboId",
+        as: "contracts",
+        onDelete: "CASCADE",
+      });
       CarAbo.belongsToMany(models.Media, {
         through: "MediaCrmCarAbos",
         foreignKey: "mediaId",

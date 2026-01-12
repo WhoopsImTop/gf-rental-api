@@ -4,12 +4,12 @@
 module.exports = {
   async up(queryInterface, Sequelize) {
     await queryInterface.addColumn("Contracts", "accountHolderName", {
-      type: Sequelize.STRING,
+      type: Sequelize.TEXT,
       allowNull: true,
     });
 
     await queryInterface.addColumn("Contracts", "iban", {
-      type: Sequelize.STRING,
+      type: Sequelize.TEXT,
       allowNull: true,
     });
 
@@ -24,7 +24,7 @@ module.exports = {
     });
 
     await queryInterface.addColumn("Contracts", "score", {
-      type: Sequelize.STRING,
+      type: Sequelize.TEXT,
       allowNull: true,
     });
   },

@@ -1,6 +1,6 @@
 const bcrypt = require("bcrypt");
 const { createToken } = require("../../services/auth/tokenService");
-const { User, Session } = require("../../models"); // Importiere das User-Modell
+const { User, Session, Cart } = require("../../models"); // Importiere das User-Modell
 const { createHash, encrypt } = require("../../services/encryption");
 const { sendOtpEmail } = require("../../services/mailService");
 const {
@@ -106,6 +106,12 @@ exports.verifyOtp = async (req, res) => {
     const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
     await Session.create({ userId: user.id, token, expiresAt });
 
+    //update Cart
+    const cartData = await Cart.update(
+      { userId: user.id },
+      { where: { id: req.body.cartId } }
+    );
+
     res.json({
       user: {
         id: user.id,
@@ -128,6 +134,7 @@ exports.loginUser = async (req, res) => {
 
   try {
     const emailHash = createHash(email);
+    console.log(emailHash);
     // Benutzer anhand der Email suchen
     const user = await User.scope("withPassword").findOne({
       where: { emailHash },
@@ -188,7 +195,9 @@ exports.cantamenAuth = async (req, res) => {
 
   try {
     const authData = await authentificateWithCantamen(email, password);
-    const { userData, sepaMandate } = await collectUserDataFromCantamen(authData.id);
+    const { userData, sepaMandate } = await collectUserDataFromCantamen(
+      authData.id
+    );
 
     console.log("Cantamen User Data:", userData);
 
@@ -228,7 +237,9 @@ exports.cantamenAuth = async (req, res) => {
         email: user.email,
         phone: user.phone,
         role: user.role,
-        birthday: userData.birthDate ? new Date(userData.birthDate).toISOString().split('T')[0] : null, // Ensure YYYY-MM-DD
+        birthday: userData.birthDate
+          ? new Date(userData.birthDate).toISOString().split("T")[0]
+          : null, // Ensure YYYY-MM-DD
         birthPlace: userData.birthPlace,
         street: userData.address?.street,
         housenumber: userData.address?.streetNr,
@@ -241,7 +252,6 @@ exports.cantamenAuth = async (req, res) => {
       },
       token,
     });
-
   } catch (e) {
     console.log(e);
     res.status(500).json({ error: e.message || "Internal server error" });

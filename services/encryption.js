@@ -1,43 +1,59 @@
 const crypto = require("crypto");
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY; // Muss 32 Bytes sein
-const IV_LENGTH = 16;
 
-if (ENCRYPTION_KEY.length !== 32) {
-  throw new Error("Encryption key must be exactly 32 bytes long.");
+const ALGORITHM = "aes-256-gcm";
+const IV_LENGTH = 12;
+const KEY = Buffer.from(process.env.ENCRYPTION_KEY, "hex");
+
+if (KEY.length !== 32) {
+  throw new Error("ENCRYPTION_KEY must be 32 bytes (hex encoded)");
 }
 
 function encrypt(value) {
+  if (value == null) return null;
+
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(
-    "aes-256-cbc",
-    Buffer.from(ENCRYPTION_KEY),
-    iv
-  );
-  let encrypted = cipher.update(value, "utf8", "hex");
-  encrypted += cipher.final("hex");
-  return `${iv.toString("hex")}:${encrypted}`;
+  const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
+
+  const encrypted = Buffer.concat([
+    cipher.update(String(value), "utf8"),
+    cipher.final(),
+  ]);
+
+  const tag = cipher.getAuthTag();
+
+  return `v1:${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString(
+    "hex"
+  )}`;
 }
 
-function decrypt(value) {
-  const [ivHex, encryptedData] = value.split(":");
-  if (!ivHex || !encryptedData) throw new Error("Invalid data format");
-  const iv = Buffer.from(ivHex, "hex");
+function decrypt(payload) {
+  if (!payload) return null;
+
+  const [version, ivHex, tagHex, dataHex] = payload.split(":");
+  if (version !== "v1") throw new Error("Unsupported encryption version");
+
   const decipher = crypto.createDecipheriv(
-    "aes-256-cbc",
-    Buffer.from(ENCRYPTION_KEY),
-    iv
+    ALGORITHM,
+    KEY,
+    Buffer.from(ivHex, "hex")
   );
-  let decrypted = decipher.update(encryptedData, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
+
+  decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(dataHex, "hex")),
+    decipher.final(),
+  ]);
+
+  return decrypted.toString("utf8");
 }
 
 function isEncrypted(value) {
-  return typeof value === "string" && value.includes(":");
+  return typeof value === "string" && value.startsWith("v1:");
 }
 
 function createHash(value) {
-  return crypto.createHash("sha256").update(value).digest("hex");
+  return crypto.createHash("sha256").update(String(value)).digest("hex");
 }
 
 module.exports = { encrypt, decrypt, isEncrypted, createHash };

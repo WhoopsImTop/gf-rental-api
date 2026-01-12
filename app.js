@@ -13,13 +13,13 @@ const crmCustomerRoute = require("./routes/crm/customerRoute");
 const statusRoute = require("./routes/crm/statusRoute");
 const userRoute = require("./routes/general/userRoute");
 const cartRoute = require("./routes/cartRoute");
+const deliveryCostsRoute = require("./routes/deliveryCosts");
 
 const reviewRoute = require("./routes/website/reviewRoute");
 const contractRoute = require("./routes/contractRoute");
 
-
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
-const AuthMiddleware = require("./middleware/authMiddleware");
+const { authenticateToken } = require("./middleware/authMiddleware");
 
 const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
@@ -51,7 +51,7 @@ app.get("/", (req, res) => {
 
 // Routen
 app.use("/api/auth", AuthentificationRoute);
-app.use("/api/users", AuthMiddleware, userRoute);
+app.use("/api/users", authenticateToken, userRoute);
 app.use("/api/car-abos", carAboRoute);
 app.use("/api/brands", brandRoute);
 app.use("/api/sellers", sellerRoute);
@@ -59,11 +59,10 @@ app.use("/api/carsharing-cars", carsharingCarRoute);
 app.use("/api/uploads", uploadRoute);
 app.use("/api/contracts", contractRoute);
 app.use("/api/cart", cartRoute);
-
-
+app.use("/api/delivery-costs", deliveryCostsRoute);
 
 //CRM-Routen
-app.use("/api/crm/customers", AuthMiddleware, crmCustomerRoute);
+app.use("/api/crm/customers", authenticateToken, crmCustomerRoute);
 app.use("/api/crm/status", statusRoute);
 
 //Website-Routen (öffentlich)

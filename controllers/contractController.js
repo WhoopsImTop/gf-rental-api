@@ -1,5 +1,6 @@
 const db = require("../models");
-const { encrypt } = require("../services/encryption");
+const { logger } = require("../services/logging");
+const { getGeoData } = require("../services/geoCoder");
 
 exports.getAllContracts = async (req, res) => {
   try {
@@ -14,6 +15,17 @@ exports.getAllContracts = async (req, res) => {
         },
         {
           model: db.CarAbo,
+          as: "carAbo",
+        },
+        {
+          model: db.CarAboColor,
+          as: "color",
+          required: false,
+        },
+        {
+          model: db.CarAboPrice,
+          as: "price",
+          required: false,
         },
       ],
     });
@@ -32,7 +44,7 @@ exports.getAllContracts = async (req, res) => {
 };
 
 exports.createContract = async (req, res) => {
-  const {
+  let {
     carAboId,
     colorId,
     userId,
@@ -44,6 +56,16 @@ exports.createContract = async (req, res) => {
 
   try {
     const result = await db.sequelize.transaction(async (transaction) => {
+      if (!userId) {
+        logger(
+          "error",
+          "Creating Contract lasted in Error because of missing userID"
+        );
+        res.status(400).json({
+          message: "No UserId Provided. Please try again",
+        });
+      }
+
       // 1. Create or Update CustomerDetails
       let details = await db.CustomerDetails.findOne({
         where: { userId },
@@ -92,6 +114,10 @@ exports.createContract = async (req, res) => {
           transaction,
         });
       }
+
+      //get Lat Lng
+      const address = `${detailsPayload.street} ${detailsPayload.houseNumber}, ${detailsPayload.postalCode} ${detailsPayload.city}`;
+      const { lat, lon } = await getGeoData(address);
 
       // 2. Create Contract
 
@@ -171,6 +197,12 @@ exports.createContract = async (req, res) => {
           monthlyPrice: monthlyPrice,
           totalCost: totalCost,
           orderCompleted: false,
+          carAboId: Cart.carAboId,
+          colorId: Cart.colorId,
+          priceId: Cart.priceId,
+          withDeposit: Cart.withDeposit,
+          lat: lat,
+          lng: lon,
         },
         { transaction }
       );
@@ -207,6 +239,22 @@ exports.createContract = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating contract:", error);
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+exports.deleteContract = async (req, res) => {
+  const id = req.params.id;
+  try {
+    let deletedContract = await db.Contract.destroy({ where: { id } });
+    res.status(201).json({
+      message: "Contract deleted successfully",
+      deletedContractId: id,
+    });
+  } catch (error) {
     res.status(500).json({
       message: "Internal server error",
       error: error.message,
