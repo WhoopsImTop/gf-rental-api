@@ -1,6 +1,15 @@
 const { Op } = require("sequelize");
 const db = require("../models");
 
+exports.getAllPlz = async (req, res) => {
+  try {
+    let plz = await db.Postleitzahlen.findAll();
+    res.status(201).json(plz);
+  } catch (error) {
+    res.status(500).json({ error: "Fehler beim Laden…" });
+  }
+};
+
 exports.getDeliveryCostByPlz = async (req, res) => {
   try {
     const { plz } = req.params;

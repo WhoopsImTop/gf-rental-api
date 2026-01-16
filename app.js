@@ -14,6 +14,8 @@ const statusRoute = require("./routes/crm/statusRoute");
 const userRoute = require("./routes/general/userRoute");
 const cartRoute = require("./routes/cartRoute");
 const deliveryCostsRoute = require("./routes/deliveryCosts");
+const emailRoute = require("./routes/emailRoute");
+const settingRoute = require("./routes/settingRoute");
 
 const reviewRoute = require("./routes/website/reviewRoute");
 const contractRoute = require("./routes/contractRoute");
@@ -60,6 +62,8 @@ app.use("/api/uploads", uploadRoute);
 app.use("/api/contracts", contractRoute);
 app.use("/api/cart", cartRoute);
 app.use("/api/delivery-costs", deliveryCostsRoute);
+app.use("/api/mail", emailRoute);
+app.use("/api/settings", settingRoute);
 
 //CRM-Routen
 app.use("/api/crm/customers", authenticateToken, crmCustomerRoute);

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #333; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #28a745; padding-bottom: 10px; }
+        .section { margin-top: 20px; }
+        .section-title { font-weight: bold; background: #f0f0f0; padding: 5px; border-radius: 3px; margin-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .field { margin-bottom: 5px; }
+        .label { font-weight: bold; font-size: 8pt; color: #666; display: block; }
+        .checkbox-group { display: flex; gap: 15px; margin-top: 5px; }
+        .checkbox { border: 1px solid #000; width: 12px; height: 12px; display: inline-block; text-align: center; line-height: 12px; font-size: 10px; }
+        .damage-drawing { border: 1px solid #ccc; height: 100px; text-align: center; padding: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h1 style="color: #28a745; margin: 0;">Grüne Flotte</h1>
+            <p>Auto Abo / Camper Abo [cite: 4]</p>
+        </div>
+        <div style="text-align: right;">
+            <span class="label">Vertrags-Nr. [cite: 13]</span>
+            <strong>{{contractNumber}}</strong>
+        </div>
+    </div>
+
+    <div class="section grid">
+        <div>
+            <span class="label">Vermieter [cite: 17]</span>
+            Autohaus Schmid Waldkirch GmbH [cite: 18]<br>
+            Stahlhofstraße 3, 79183 Waldkirch [cite: 19]
+        </div>
+        <div>
+            <span class="label">Kontakt [cite: 26]</span>
+            Tel: 07681 474008-0 [cite: 28]<br>
+            {{landlordEmail}} [cite: 33]
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Mieter / Rechnungsanschrift [cite: 51]</div>
+        <div class="grid">
+            <div class="field"><span class="label">Name / Firma</span> {{customerName}}</div>
+            <div class="field"><span class="label">Mandatsreferenz-Nr. [cite: 51]</span> {{mandateRef}}</div>
+            <div class="field"><span class="label">Geburtsdatum [cite: 52]</span> {{birthDate}}</div>
+            <div class="field"><span class="label">Personalausweis-Nr. [cite: 55]</span> {{idCardNumber}}</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Fahrzeugdetails [cite: 43]</div>
+        <div class="grid">
+            <div class="field"><span class="label">Amtl. Kennzeichen [cite: 47]</span> {{licensePlate}}</div>
+            <div class="field"><span class="label">Fahrzeug-Typ [cite: 48]</span> {{carType}}</div>
+            <div class="field">
+                <span class="label">Freikilometer/Monat [cite: 10]</span>
+                <div class="checkbox-group">
+                    <span class="checkbox">{{#if (eq kmPackage 1250)}}X{{/if}}</span> 1.250km [cite: 11]
+                    <span class="checkbox">{{#if (eq kmPackage 2500)}}X{{/if}}</span> 2.500km [cite: 12]
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Vorschäden [cite: 65]</div>
+        <div class="checkbox-group">
+            <span>Vorschäden vorhanden:</span>
+            <span class="checkbox">{{#if hasDamage}}X{{/if}}</span> Ja
+            <span class="checkbox">{{#unless hasDamage}}X{{/unless}}</span> Nein [cite: 66]
+        </div>
+        <div class="field" style="margin-top: 10px;">
+            <span class="label">Bemerkungen [cite: 81]</span>
+            <div style="border-bottom: 1px solid #ccc; min-height: 40px;">{{damageNotes}}</div>
+        </div>
+    </div>
+
+    <div class="section grid" style="margin-top: 50px;">
+        <div style="border-top: 1px solid #000; padding-top: 5px;">
+            <span class="label">Ort / Datum [cite: 86]</span>
+            {{currentDate}}
+        </div>
+        <div style="border-top: 1px solid #000; padding-top: 5px;">
+            <span class="label">Unterschrift Mieter [cite: 93]</span>
+            {{#if signatureUrl}}<img src="{{signatureUrl}}" width="150">{{/if}}
+        </div>
+    </div>
+
+</body>
+</html>

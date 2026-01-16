@@ -1,5 +1,7 @@
 const nodemailer = require("nodemailer");
-const handlebars = require('handlebars');
+const handlebars = require("handlebars");
+const path = require("path");
+const fs = require("fs");
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.example.com",
@@ -17,52 +19,88 @@ exports.sendOtpEmail = async (email, code) => {
     return;
   }
 
+  const htmlContent = exports.generateEmailHtml(
+    "Dein Grüne Flotte Verifizierungscode", // Titel der E-Mail
+    `<p style="margin: 0; padding: 0;">Dein Code lautet: <b>${code}</b><br>
+    <span style="font-size: 12px; color: #333333; line-height: 1em;">Dieser Code ist 10 Minuten gültig.</span></p>
+    <br>
+    <p style="margin: 0; padding: 0;">Sollten Sie keinen Code angefordert haben, können Sie diese Email ignorieren.</p>
+    <br>
+    <p style="margin: 0; padding: 0;"><strong>Mit freundlichen Grüßen</strong></p>
+    <p style="margin: 0; padding: 0;">Ihr Grüne Flotte Team</p>` // E-Mail Inhalt
+  );
+
   const info = await transporter.sendMail({
-    from: '"Elias Englen" <info@elias-englen.de>', // sender address
-    to: email, // list of receivers
-    subject: "Dein Verifizierungscode", // Subject line
-    text: `Dein Code ist: ${code}`, // plain text body
-    html: `<b>Dein Code ist: ${code}</b>`, // html body
+    from: '"Elias Englen" <info@elias-englen.de>',
+    to: email,
+    subject: "Dein Verifizierungscode",
+    text: `Dein Code ist: ${code}`, // Fallback-Text
+    html: htmlContent, // HTML-Content aus Template
   });
 
   console.log("Message sent: %s", info.messageId);
 };
 
 exports.sendEmail = async (message) => {
-  const info = await transporter.sendMail({
-    from: '"Elias Englen" <info@elias-englen.de>', // sender address
-    to: "englen@khri8.com", // list of receivers
-    subject: "Auto Abo Prozess error", // Subject line
-    text: `${sendEmail}`, // plain text body
-    html: `${sendEmail}`, // html body
-  });
+  try {
+    const info = await transporter.sendMail({
+      from: '"Elias Englen" <info@elias-englen.de>', // sender address
+      to: "englen@khri8.com", // list of receivers
+      subject: "Auto Abo Prozess error", // Subject line
+      text: `${message}`, // plain text body
+      html: `${message}`, // html body
+    });
 
-  console.log("Message sent: %s", info.messageId);
+    console.log("Message sent: %s", info.messageId);
+    return true;
+  } catch (error) {
+    console.log("Errors:", error);
+    return false;
+  }
 };
 
-const generateEmailHtml = (title, firstname, contentHtml) => {
-    try {
-        // 1. Pfad zur Datei definieren
-        const templatePath = path.join(__dirname, '../templates/mail/default.hbs');
+exports.sendNotificationEmail = async (
+  email,
+  cc = null,
+  title,
+  message,
+  attachments = null
+) => {
+  try {
+    const info = await transporter.sendMail({
+      from: '"Elias Englen" <info@elias-englen.de>', // sender address
+      cc: cc,
+      to: email, // list of receivers
+      subject: title, // Subject line
+      text: `${message}`, // plain text body
+      html: `${message}`, // html body
+      attachments: attachments,
+    });
 
-        // 2. Datei einlesen
-        const source = fs.readFileSync(templatePath, 'utf8');
+    console.log("Message sent: %s", info.messageId);
+    return true;
+  } catch (error) {
+    console.log("Errors:", error);
+    return false;
+  }
+};
 
-        // 3. Template kompilieren
-        const template = handlebars.compile(source);
+exports.generateEmailHtml = (title, contentHtml) => {
+  try {
+    const templatePath = path.join(__dirname, "../templates/mail/default.hbs");
 
-        // 4. Daten mappen
-        const data = {
-            EMAILTITLE: title,
-            FIRSTNAME: firstname,
-            EMAILCONTENT: contentHtml // Hier übergeben wir HTML-Code!
-        };
+    const source = fs.readFileSync(templatePath, "utf8");
 
-        // 5. Fertiges HTML zurückgeben
-        return template(data);
+    const template = handlebars.compile(source);
 
-    } catch (error) {
-        console.error('Fehler beim Generieren des Email-Templates:', error);
-        throw error;
-    }
+    const data = {
+      EMAILTITLE: title,
+      EMAILCONTENT: contentHtml,
+    };
+
+    return template(data);
+  } catch (error) {
+    console.error("Fehler beim Generieren des Email-Templates:", error);
+    throw error;
+  }
 };
