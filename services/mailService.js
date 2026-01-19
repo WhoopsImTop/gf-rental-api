@@ -41,7 +41,7 @@ exports.sendOtpEmail = async (email, code) => {
   console.log("Message sent: %s", info.messageId);
 };
 
-exports.sendEmail = async (message) => {
+exports.sendErrorEmail = async (message) => {
   try {
     const info = await transporter.sendMail({
       from: '"Grüne Flotte Auto Abo" <info@gruene-flotte-autoabo.de>', // sender address

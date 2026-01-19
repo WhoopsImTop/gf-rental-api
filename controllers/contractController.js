@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const {
   generateEmailHtml,
-  sendEmail,
+  sendErrorEmail,
   sendNotificationEmail,
 } = require("../services/mailService");
 const { logger } = require("../services/logging");
@@ -318,6 +318,7 @@ exports.createContract = async (req, res) => {
 
       const emailSent = await sendNotificationEmail(
         user.email,
+        null,
         "Ihre Auto Abo Bestellung - Grüne Flotte Auto Abo",
         generatedEmailContent,
       );
@@ -339,6 +340,10 @@ exports.createContract = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating contract:", error);
+    logger(
+      "error",
+      "Error creating contract" + error,
+    );
     res.status(500).json({
       message: "Internal server error",
       error: error.message,

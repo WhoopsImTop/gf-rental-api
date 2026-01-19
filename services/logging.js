@@ -1,23 +1,29 @@
 const fs = require("fs");
+const { sendErrorEmail } = require("../services/mailService");
+
 const logFiles = ["geoCoder", "debug", "error", "info", "warn"];
-const { sendEmail } = require("../services/mailService");
 
 exports.logger = (logType, message) => {
   const folder = "./logs";
+
   if (!fs.existsSync(folder)) {
-    fs.mkdirSync(folder);
+    fs.mkdirSync(folder, { recursive: true });
   }
+
   if (!logFiles.includes(logType)) {
-    if (logType === "error") {
-      sendEmail(message);
-    }
-    throw new Error("Invalid log type");
+    throw new Error(`Invalid log type: ${logType}`);
   }
+
+  if (logType === "error") {
+    sendErrorEmail(message);
+  }
+
   const date = new Date();
   const logMessage = `${date.toISOString()} - ${message}\n`;
+
   fs.appendFile(`${folder}/${logType}.log`, logMessage, (err) => {
     if (err) {
-      console.error(err);
+      console.error("Failed to write log:", err);
     }
   });
 };
