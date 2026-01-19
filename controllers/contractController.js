@@ -83,7 +83,7 @@ exports.createContract = async (req, res) => {
       const detailsPayload = {
         userId,
         birthday: customerDetails.birthday,
-        street: customerDetails.street,
+        street: customerDetails.street || "",
         housenumber: customerDetails.housenumber,
         postalCode: customerDetails.postalCode,
         city: customerDetails.city,
@@ -102,6 +102,8 @@ exports.createContract = async (req, res) => {
       } else {
         await db.CustomerDetails.create(detailsPayload, { transaction });
       }
+
+
 
       // Also update User basic info if provided
       if (
@@ -340,9 +342,7 @@ exports.createContract = async (req, res) => {
     console.error("Error creating contract:", error);
     res.status(500).json({
       message: "Internal server error",
-      error: error.message,
-      customerDetails: customerDetails,
-      detailsPayload: detailsPayload
+      error: error.message
     });
   }
 };
