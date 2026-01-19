@@ -115,7 +115,7 @@ async function migrateEncryption() {
 
             if (DRY_RUN) {
               console.log(
-                `ID ${row.id}, Feld ${field}: würde migriert\n  Alt: ${oldValue}\n  Neu: ${reEncrypted}`
+                `ID ${row.id}, Feld ${field}: würde migriert\n  Alt: ${oldValue} - ${oldValue}\n  Neu: ${reEncrypted}`
               );
             } else {
             }
