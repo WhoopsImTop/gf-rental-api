@@ -15,7 +15,7 @@ const newEnc = require("./services/encryption");
 // -------------------
 // CONFIG
 // -------------------
-const DRY_RUN = true;
+const DRY_RUN = false;
 
 // Sequelize Verbindung
 const sequelize = new Sequelize(
@@ -118,6 +118,7 @@ async function migrateEncryption() {
                 `ID ${row.id}, Feld ${field}: würde migriert\n  Alt: ${oldValue} - ${decrypted}\n  Neu: ${reEncrypted}`
               );
             } else {
+              row.set(field, reEncrypted);
             }
           } catch (err) {
             console.error(
@@ -127,6 +128,7 @@ async function migrateEncryption() {
         }
 
         if (!DRY_RUN) {
+          await row.save();
           console.log(`ID ${row.id}: erfolgreich gespeichert`);
         }
       }
