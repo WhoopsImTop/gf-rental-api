@@ -67,7 +67,7 @@ exports.createContract = async (req, res) => {
       if (!userId) {
         logger(
           "error",
-          "Creating Contract lasted in Error because of missing userID"
+          "Creating Contract lasted in Error because of missing userID",
         );
         res.status(400).json({
           message: "No UserId Provided. Please try again",
@@ -124,8 +124,14 @@ exports.createContract = async (req, res) => {
       }
 
       //get Lat Lng
-      const address = `${detailsPayload.street} ${detailsPayload.houseNumber}, ${detailsPayload.postalCode} ${detailsPayload.city}`;
-      const { lat, lon } = await getGeoData(address);
+      let lat = null;
+      let lon = null;
+      if (detailsPayload.street && detailsPayload.city) {
+        const address = `${detailsPayload.street} ${detailsPayload.housenumber}, ${detailsPayload.postalCode} ${detailsPayload.city}`;
+        const geoData = await getGeoData(address);
+        lat = geoData?.lat;
+        lon = geoData?.lon;
+      }
 
       // 2. Create Contract
 
@@ -161,7 +167,7 @@ exports.createContract = async (req, res) => {
 
       if (Cart.priceId && Cart.car && Cart.car.prices) {
         selectedPrice = Cart.car.prices.find(
-          (price) => price.id === Cart.priceId
+          (price) => price.id === Cart.priceId,
         );
       }
 
@@ -212,21 +218,21 @@ exports.createContract = async (req, res) => {
           lat: lat,
           lng: lon,
         },
-        { transaction }
+        { transaction },
       );
 
       // 3. Link CarAbo to Contract
       await contract.setCarAbo(carAboId, { transaction });
       await db.CarAbo.update(
         { ContractId: contract.id, status: "reserved" },
-        { where: { id: carAboId }, transaction }
+        { where: { id: carAboId }, transaction },
       );
 
       // 4. Update Color Variant Stock
       if (colorId) {
         await db.CarAboColor.update(
           { isOrdered: true },
-          { where: { id: colorId }, transaction }
+          { where: { id: colorId }, transaction },
         );
       }
 
@@ -234,7 +240,7 @@ exports.createContract = async (req, res) => {
       if (cartId) {
         await db.Cart.update(
           { completed: true },
-          { where: { id: cartId }, transaction }
+          { where: { id: cartId }, transaction },
         );
       }
 
@@ -272,8 +278,8 @@ exports.createContract = async (req, res) => {
           <tr><td>Vorname</td><td>${user.firstName}</td></tr>
           <tr><td>Nachname</td><td>${user.lastName}</td></tr>
           <tr><td>Straße</td><td>${user.customerDetails.street} ${
-        user.customerDetails.housenumber
-      }</td></tr>
+            user.customerDetails.housenumber
+          }</td></tr>
           <tr><td>PLZ</td><td>${user.customerDetails.postalCode}</td></tr>
           <tr><td>Ort</td><td>${user.customerDetails.city}</td></tr>
           <tr><td>Telefon</td><td>${user.phone}</td></tr>
@@ -291,8 +297,8 @@ exports.createContract = async (req, res) => {
             contract.insurancePackage ? "Ja" : "Nein"
           }</td></tr>
           <tr><td>Vertragslaufzeit</td><td>${contract.duration} ${
-        contract.duration > 1 ? "Monate" : "Monat"
-      }</td></tr>
+            contract.duration > 1 ? "Monate" : "Monat"
+          }</td></tr>
           <tr><td>Führerscheinnummer</td><td>${
             user.customerDetails.driversLicenseNumber
           }</td></tr>
@@ -309,17 +315,17 @@ exports.createContract = async (req, res) => {
       const generatedEmailContent = await generateEmailHtml(
         "Ihre Auto Abo Bestellung",
         user.customerDetails.firstname,
-        emailContent
+        emailContent,
       );
       const emailSent = await sendNotificationEmail(
         user.email,
         "Ihre Auto Abo Bestellung - Grüne Flotte Auto Abo",
-        generatedEmailContent
+        generatedEmailContent,
       );
       if (!emailSent) {
         logger(
           "error",
-          "Email konnte nicht versendet werden Contract: #" + Contract.id
+          "Email konnte nicht versendet werden Contract: #" + Contract.id,
         );
       }
 
@@ -347,7 +353,7 @@ exports.archiveContract = async (req, res) => {
     let updatedArchivedValue = !isArchivedContract;
     let updatedContract = await db.Contract.update(
       { archived: updatedArchivedValue },
-      { where: { id } }
+      { where: { id } },
     );
     res.status(201).json({
       success: true,
@@ -437,7 +443,7 @@ exports.viewContractFile = async (req, res) => {
     const filePath = path.join(
       __dirname,
       "../internal-files/contracts",
-      filename
+      filename,
     );
 
     if (!fs.existsSync(filePath)) {
@@ -467,7 +473,7 @@ exports.shareContractFile = async (req, res) => {
     const filePath = path.join(
       __dirname,
       "../internal-files/contracts",
-      contract.contractFile
+      contract.contractFile,
     );
     res.sendFile(filePath);
   } catch (error) {
