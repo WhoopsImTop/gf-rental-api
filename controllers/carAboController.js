@@ -10,7 +10,7 @@ const carAboIncludes = [
   },
   {
     model: db.CarAboMedia,
-    as: "carAboMedia",
+    as: "media",
     include: [{ model: db.Media, as: "media" }],
   },
   {
@@ -28,7 +28,7 @@ const carAboAdminIncludes = [
   },
   {
     model: db.CarAboMedia,
-    as: "carAboMedia",
+    as: "media",
     include: [{ model: db.Media, as: "media" }],
   },
   {
