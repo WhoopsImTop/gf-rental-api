@@ -279,13 +279,13 @@ exports.createContract = async (req, res) => {
         <tbody>
           <tr><td>Vorname</td><td>${user.firstName}</td></tr>
           <tr><td>Nachname</td><td>${user.lastName}</td></tr>
-          <tr><td>Straße</td><td>${user.customerDetails.street} ${
-            user.customerDetails.housenumber
+          <tr><td>Straße</td><td>${user.customerDetails.street ?? ''} ${
+            user.customerDetails.housenumber ?? ''
           }</td></tr>
-          <tr><td>PLZ</td><td>${user.customerDetails.postalCode}</td></tr>
-          <tr><td>Ort</td><td>${user.customerDetails.city}</td></tr>
-          <tr><td>Telefon</td><td>${user.phone}</td></tr>
-          <tr><td>Email</td><td>${user.email}</td></tr>
+          <tr><td>PLZ</td><td>${user.customerDetails.postalCode ?? ''}</td></tr>
+          <tr><td>Ort</td><td>${user.customerDetails.city ?? ''}</td></tr>
+          <tr><td>Telefon</td><td>${user.phone ?? ''}</td></tr>
+          <tr><td>Email</td><td>${user.email ?? ''}</td></tr>
           <tr><td>Wunschstarttermin</td><td>${
             contract.startingDate
               ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
