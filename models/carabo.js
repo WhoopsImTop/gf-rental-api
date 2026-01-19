@@ -36,7 +36,7 @@ module.exports = (sequelize, DataTypes) => {
       });
       CarAbo.hasMany(models.CarAboMedia, {
         foreignKey: "carAboId",
-        as: "media",
+        as: "carAboMedia",
         onDelete: "CASCADE",
       });
     }
