@@ -103,8 +103,6 @@ exports.createContract = async (req, res) => {
         await db.CustomerDetails.create(detailsPayload, { transaction });
       }
 
-
-
       // Also update User basic info if provided
       if (
         customerDetails.firstName ||
@@ -250,7 +248,9 @@ exports.createContract = async (req, res) => {
       const user = await db.User.findOne({
         include: [{ model: db.CustomerDetails, as: "customerDetails" }],
         where: { id: userId },
+        transaction, // <--- DAS HAT GEFEHLT
       });
+
       const autoAbo = await db.CarAbo.findOne({
         include: [
           {
@@ -265,69 +265,68 @@ exports.createContract = async (req, res) => {
             include: [{ model: db.Media, as: "media" }],
           },
         ],
-        where: {
-          id: contract.carAboId,
-        },
+        where: { id: contract.carAboId },
+        transaction, // <--- AUCH HIER
       });
 
+      // Sicherheits-Check: Falls User trotzdem nicht gefunden wurde
+      if (!user) {
+        throw new Error("User for email notification not found");
+      }
+
       const emailContent = `
-      <p>Hiermit bestätigen wir Ihr Abo Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
-      <p><strong>Um die Übergabe zu erleichtern, schicken Sie uns Bitte eine Kopie der Vorder- und Rückseite ihres Personalausweises und Führerscheins zu.</strong></p>
-      <p><a href="mailto:info@gruene-flotte-auto-abo.de" style="background-color: #82ba26; padding: 16px 8px; border-radius: 12px; color: #ffffff;">info@gruene-flotte-auto-abo.de</a></p>
-      <h2 style="font-weight: 900">Ihre Daten</h2>
-      <table>
-        <tbody>
-          <tr><td>Vorname</td><td>${user.firstName}</td></tr>
-          <tr><td>Nachname</td><td>${user.lastName}</td></tr>
-          <tr><td>Straße</td><td>${user?.customerDetails?.street || ''} ${
-            user?.customerDetails?.housenumber || ''
-          }</td></tr>
-          <tr><td>PLZ</td><td>${user?.customerDetails?.postalCode || ''}</td></tr>
-          <tr><td>Ort</td><td>${user?.customerDetails?.city || ''}</td></tr>
-          <tr><td>Telefon</td><td>${user.phone || ''}</td></tr>
-          <tr><td>Email</td><td>${user.email || ''}</td></tr>
-          <tr><td>Wunschstarttermin</td><td>${
-            contract.startingDate
-              ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
-                  day: "numeric",
-                  month: "long",
-                  year: "2-digit",
-                })
-              : "-"
-          }</td></tr>
-          <tr><td>Sicherheitspaket</td><td>${
-            contract.insurancePackage ? "Ja" : "Nein"
-          }</td></tr>
-          <tr><td>Vertragslaufzeit</td><td>${contract.duration} ${
-            contract.duration > 1 ? "Monate" : "Monat"
-          }</td></tr>
-          <tr><td>Führerscheinnummer</td><td>${
-            user.customerDetails.driversLicenseNumber
-          }</td></tr>
-          <tr><td>Personalausweisnummer</td><td>${
-            user.customerDetails.IdCardNumber
-          }</td></tr>
-          <tr><td>Monatliche Rate</td><td>${contract.monthlyPrice} €</td></tr>
-        </tbody>
-      </table>
-      <p>Die erste Rate wird in den nächsten Tagen von deinem Konto abgebucht.</p>
-      <p>Bei Fragen stehen wir Ihnen jederzeit gerne zur Verfügung.</p>
-      <p>Wir wünschen Ihnen viel Spaß mit Ihrem neuen Auto Abo.<br>
-      Ihr Grüne Flotte Team</p>`;
+<p>Hiermit bestätigen wir Ihr Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
+<p><strong>Um die Übergabe zu erleichtern, schicken Sie uns bitte eine Kopie der Vorder- und Rückseite Ihres Personalausweises und Führerscheins zu.</strong></p>
+<p><a href="mailto:info@gruene-flotte-auto-abo.de" style="background-color: #82ba26; padding: 16px 8px; border-radius: 12px; color: #ffffff; text-decoration: none;">info@gruene-flotte-auto-abo.de</a></p>
+<h2 style="font-weight: 900">Ihre Daten</h2>
+<table>
+  <tbody>
+    <tr><td>Vorname</td><td>${user.firstName || "-"}</td></tr>
+    <tr><td>Nachname</td><td>${user.lastName || "-"}</td></tr>
+    <tr><td>Straße</td><td>${user.customerDetails?.street || "-"} ${user.customerDetails?.housenumber || ""}</td></tr>
+    <tr><td>PLZ</td><td>${user.customerDetails?.postalCode || "-"}</td></tr>
+    <tr><td>Ort</td><td>${user.customerDetails?.city || "-"}</td></tr>
+    <tr><td>Telefon</td><td>${user.phone || "-"}</td></tr>
+    <tr><td>Email</td><td>${user.email || "-"}</td></tr>
+    <tr><td>Wunschstarttermin</td><td>${
+      contract.startingDate
+        ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })
+        : "-"
+    }</td></tr>
+    <tr><td>Vertragslaufzeit</td><td>${contract.duration} ${contract.duration > 1 ? "Monate" : "Monat"}</td></tr>
+    <tr><td>Führerscheinnummer</td><td>${user.customerDetails?.driversLicenseNumber || "-"}</td></tr>
+    <tr><td>Personalausweisnummer</td><td>${user.customerDetails?.IdCardNumber || "-"}</td></tr>
+    <tr><td>Monatliche Rate</td><td>${contract.monthlyPrice} €</td></tr>
+  </tbody>
+</table>
+<p>Die erste Rate wird in den nächsten Tagen von Ihrem Konto abgebucht.</p>
+<p>Ihr Grüne Flotte Team</p>`;
+
+      // ACHTUNG: Prüfe ob dein Model "firstName" oder "firstname" nutzt (meistens firstName)
+      const recipientName =
+        user.customerDetails?.firstName || user.firstName || "Kunde";
+
       const generatedEmailContent = await generateEmailHtml(
         "Ihre Auto Abo Bestellung",
-        user.customerDetails.firstname,
+        recipientName,
         emailContent,
       );
+
       const emailSent = await sendNotificationEmail(
         user.email,
         "Ihre Auto Abo Bestellung - Grüne Flotte Auto Abo",
         generatedEmailContent,
       );
+
       if (!emailSent) {
+        // Hier "contract.id" statt "Contract.id" (Variablen sind Case-Sensitive!)
         logger(
           "error",
-          "Email konnte nicht versendet werden Contract: #" + Contract.id,
+          "Email konnte nicht versendet werden für Contract: #" + contract.id,
         );
       }
 
@@ -342,7 +341,7 @@ exports.createContract = async (req, res) => {
     console.error("Error creating contract:", error);
     res.status(500).json({
       message: "Internal server error",
-      error: error.message
+      error: error.message,
     });
   }
 };
