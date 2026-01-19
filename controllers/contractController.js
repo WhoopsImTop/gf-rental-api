@@ -334,7 +334,7 @@ exports.createContract = async (req, res) => {
     console.error("Error creating contract:", error);
     res.status(500).json({
       message: "Internal server error",
-      error: error.message,
+      error: error,
     });
   }
 };
