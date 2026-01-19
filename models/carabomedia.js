@@ -1,5 +1,7 @@
-"use strict";
-const { Model } = require("sequelize");
+'use strict';
+const {
+  Model
+} = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class CarAboMedia extends Model {
     /**
@@ -19,26 +21,22 @@ module.exports = (sequelize, DataTypes) => {
       });
     }
   }
-  CarAboMedia.init(
-    {
-      carAboId: DataTypes.INTEGER,
-      mediaId: DataTypes.INTEGER,
-      type: {
-        type: DataTypes.STRING,
-        allowNull: true,
-        comment: "Type of media: interior, exterior, etc.",
-      },
-      sortOrder: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-        defaultValue: 0,
-      },
+  CarAboMedia.init({
+    carAboId: DataTypes.INTEGER,
+    mediaId: DataTypes.INTEGER,
+    type: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Type of media: interior, exterior, etc."
     },
-    {
-      sequelize,
-      modelName: "CarAboMedia",
-      tableName: "CarAboMedia",
-    },
-  );
+    sortOrder: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    }
+  }, {
+    sequelize,
+    modelName: 'CarAboMedia',
+  });
   return CarAboMedia;
 };
