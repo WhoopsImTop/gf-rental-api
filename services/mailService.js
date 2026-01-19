@@ -31,7 +31,7 @@ exports.sendOtpEmail = async (email, code) => {
   );
 
   const info = await transporter.sendMail({
-    from: '"Elias Englen" <info@elias-englen.de>',
+    from: '"Grüne Flotte Auto Abo" <info@gruene-flotte-autoabo.de>',
     to: email,
     subject: "Dein Verifizierungscode",
     text: `Dein Code ist: ${code}`, // Fallback-Text
@@ -44,7 +44,7 @@ exports.sendOtpEmail = async (email, code) => {
 exports.sendEmail = async (message) => {
   try {
     const info = await transporter.sendMail({
-      from: '"Elias Englen" <info@elias-englen.de>', // sender address
+      from: '"Grüne Flotte Auto Abo" <info@gruene-flotte-autoabo.de>', // sender address
       to: "englen@khri8.com", // list of receivers
       subject: "Auto Abo Prozess error", // Subject line
       text: `${message}`, // plain text body
@@ -68,7 +68,7 @@ exports.sendNotificationEmail = async (
 ) => {
   try {
     const info = await transporter.sendMail({
-      from: '"Elias Englen" <info@elias-englen.de>', // sender address
+      from: '"Grüne Flotte Auto Abo" <info@gruene-flotte-autoabo.de>', // sender address
       cc: cc,
       to: email, // list of receivers
       subject: title, // Subject line

@@ -216,6 +216,9 @@ module.exports = (sequelize, DataTypes) => {
           return value ? decrypt(value) : null;
         },
       },
+      pickupLocationName: { type: DataTypes.STRING },
+      pickupLocationLat: { type: DataTypes.TEXT },
+      pickupLocationLng: { type: DataTypes.TEXT },
       createdAt: {
         type: DataTypes.DATE,
       },
@@ -226,7 +229,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       sequelize,
       modelName: "Contract",
-    }
+    },
   );
   return Contract;
 };
