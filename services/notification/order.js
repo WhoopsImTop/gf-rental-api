@@ -3,11 +3,10 @@ const path = require("path");
 const fs = require("fs");
 const {
   generateEmailHtml,
-  sendEmail,
   sendNotificationEmail,
 } = require("../mailService");
 
-exports.resendConfirmation = async (id) => {
+exports.orderAdminNotification = async (id) => {
   try {
     const setting = await db.Setting.findOne();
     const contract = await db.Contract.findOne({ where: { id: id } });

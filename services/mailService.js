@@ -2,6 +2,7 @@ const nodemailer = require("nodemailer");
 const handlebars = require("handlebars");
 const path = require("path");
 const fs = require("fs");
+const db = require("../models");
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.example.com",
@@ -27,7 +28,7 @@ exports.sendOtpEmail = async (email, code) => {
     <p style="margin: 0; padding: 0;">Sollten Sie keinen Code angefordert haben, können Sie diese Email ignorieren.</p>
     <br>
     <p style="margin: 0; padding: 0;"><strong>Mit freundlichen Grüßen</strong></p>
-    <p style="margin: 0; padding: 0;">Ihr Grüne Flotte Team</p>` // E-Mail Inhalt
+    <p style="margin: 0; padding: 0;">Ihr Grüne Flotte Team</p>`, // E-Mail Inhalt
   );
 
   const info = await transporter.sendMail({
@@ -64,7 +65,7 @@ exports.sendNotificationEmail = async (
   cc = null,
   title,
   message,
-  attachments = null
+  attachments = null,
 ) => {
   try {
     const info = await transporter.sendMail({
