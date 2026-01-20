@@ -1,6 +1,7 @@
 const db = require("../../models");
 const path = require("path");
 const fs = require("fs");
+const { logger } = require("../logging");
 const { generateEmailHtml, sendNotificationEmail } = require("../mailService");
 
 exports.orderAdminNotification = async (id) => {
@@ -19,19 +20,15 @@ exports.orderAdminNotification = async (id) => {
           include: [{ model: db.Media, as: "media" }],
           where: { id: contract.colorId },
         },
-        {
-          model: db.CarAboMedia,
-          as: "media",
-          include: [{ model: db.Media, as: "media" }],
-        },
       ],
       where: {
         id: contract.carAboId,
       },
     });
+    logger("error", JSON.stringify(autoAbo));
     const emailContent = `
-    <img src="${autoAbo.colors[0].media.url}" width="100%" height="auto"/>
-    <span>Fahrzeug ID (${autoAbo.colors[0].internalId})</span>
+<img src="${autoAbo.colors[0].media.url}" width="100%" height="auto"/>
+<span>Fahrzeug ID (${autoAbo.colors[0].internalId})</span>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Neues Auto Abo!</h2>
       <p>Hallo Grüne Flotte Abo-Team, es wurde ein neues Auto Abo abgeschlossen.</p>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
