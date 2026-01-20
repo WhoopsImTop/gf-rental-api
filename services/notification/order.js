@@ -1,10 +1,7 @@
 const db = require("../../models");
 const path = require("path");
 const fs = require("fs");
-const {
-  generateEmailHtml,
-  sendNotificationEmail,
-} = require("../mailService");
+const { generateEmailHtml, sendNotificationEmail } = require("../mailService");
 
 exports.orderAdminNotification = async (id) => {
   try {
@@ -33,9 +30,7 @@ exports.orderAdminNotification = async (id) => {
       },
     });
     const emailContent = `
-    <img src="${
-      process.env.APP_URL + autoAbo.colors[0].media.url
-    }" width="100%" height="auto"/>
+    <img src="${autoAbo.colors[0].media.url}" width="100%" height="auto"/>
     <span>Fahrzeug ID (${autoAbo.colors[0].internalId})</span>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Neues Auto Abo!</h2>
       <p>Hallo Grüne Flotte Abo-Team, es wurde ein neues Auto Abo abgeschlossen.</p>
@@ -81,15 +76,15 @@ exports.orderAdminNotification = async (id) => {
 
     const generatedEmailContent = await generateEmailHtml(
       "Neue Auto Abo Bestellung " + autoAbo.displayName,
-      emailContent
+      emailContent,
     );
     const emailSent = await sendNotificationEmail(
       setting.notificationEmails,
       null,
       `Neue Auto Abo Bestellung(${
         autoAbo.vehicleStatus === "new" ? "Neuwagen" : "Gebrauchtwagen"
-    }) ${autoAbo.displayName}`,
-      generatedEmailContent
+      }) ${autoAbo.displayName}`,
+      generatedEmailContent,
     );
   } catch (error) {
     console.log(error);
