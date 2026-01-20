@@ -25,7 +25,6 @@ exports.orderAdminNotification = async (id) => {
         id: contract.carAboId,
       },
     });
-    logger("error", JSON.stringify(autoAbo));
     const emailContent = `
 <img src="${autoAbo.colors[0].media.url}" width="100%" height="auto"/>
 <span>Fahrzeug ID (${autoAbo.colors[0].internalId})</span>

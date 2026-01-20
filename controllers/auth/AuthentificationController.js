@@ -101,11 +101,6 @@ exports.verifyOtp = async (req, res) => {
     // Clean up used OTP (optional, or rely on expiration/cron)
     await verification.destroy();
 
-    // Create Session
-    const token = createToken({ userId: user.id, role: user.role });
-    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
-    await Session.create({ userId: user.id, token, expiresAt });
-
     //update Cart
     const cartData = await Cart.update(
       { userId: user.id },
@@ -121,7 +116,6 @@ exports.verifyOtp = async (req, res) => {
         phone: user.phone,
         role: user.role,
       },
-      token,
     });
   } catch (error) {
     console.error("Error verifying OTP:", error);
@@ -222,11 +216,11 @@ exports.cantamenAuth = async (req, res) => {
       });
     }
 
-    // 3. Session und Token erstellen (wie in loginUser)
-    await Session.destroy({ where: { userId: user.id } });
-    const token = createToken({ userId: user.id, role: user.role });
-    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
-    await Session.create({ userId: user.id, token, expiresAt });
+    //update Cart
+    const cartData = await Cart.update(
+      { userId: user.id },
+      { where: { id: req.body.cartId } },
+    );
 
     // 4. Response zurückgeben
     res.json({
@@ -250,7 +244,6 @@ exports.cantamenAuth = async (req, res) => {
         IdCardNumber: userData.identityNumber,
         hasCantamenSepa: sepaMandate,
       },
-      token,
     });
   } catch (e) {
     console.log(e);
