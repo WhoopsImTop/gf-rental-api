@@ -312,7 +312,6 @@ exports.createContract = async (req, res) => {
 
       const generatedEmailContent = await generateEmailHtml(
         "Ihre Auto Abo Bestellung",
-        recipientName,
         emailContent,
       );
 
@@ -331,6 +330,7 @@ exports.createContract = async (req, res) => {
         );
       }
 
+      logger("error", "contract created: " + contract);
       return contract;
     });
 
@@ -340,10 +340,7 @@ exports.createContract = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating contract:", error);
-    logger(
-      "error",
-      "Error creating contract" + error,
-    );
+    logger("error", "Error creating contract" + error);
     res.status(500).json({
       message: "Internal server error",
       error: error.message,
