@@ -191,19 +191,32 @@ exports.findAvailableCarAbos = async (req, res) => {
       ],
     });
 
-    // availableFrom berechnen, falls nur availableInDays gesetzt ist
     const today = new Date();
 
     const result = carAbos.map((carAbo) => {
-      const data = carAbo.toJSON(); // wichtig, damit wir ein plain object haben
+      const data = carAbo.toJSON();
 
-      if (
-        data.availableInDays != null &&
-        (data.availableFrom == null || data.availableFrom === "")
-      ) {
-        const baseDate = new Date(today);
-        baseDate.setDate(baseDate.getDate() + Number(data.availableInDays));
-        data.availableFrom = baseDate.toISOString().split("T")[0];
+      if (data.colors && Array.isArray(data.colors)) {
+        data.colors = data.colors.map((color) => {
+          const c = { ...color };
+
+          // 1. Wenn availableFrom existiert → das verwenden
+          if (c.availableFrom) {
+            c.calculatedAvailableFrom = c.availableFrom;
+          }
+          // 2. Wenn kein availableFrom, aber availableInDays gesetzt ist (auch 0!)
+          else if (c.availableInDays != null) {
+            const baseDate = new Date(today);
+            baseDate.setDate(baseDate.getDate() + Number(c.availableInDays));
+            c.calculatedAvailableFrom = baseDate.toISOString().split("T")[0];
+          }
+          // 3. Sonst bleibt es null
+          else {
+            c.calculatedAvailableFrom = null;
+          }
+
+          return c;
+        });
       }
 
       return data;
