@@ -71,7 +71,7 @@ const updateChildren = async (Model, items, carAboId, transaction) => {
       await Model.create({ ...data, carAboId }, { transaction });
     }
   }
-  
+
   for (const leftover of existingMap.values()) {
     await leftover.destroy({ transaction });
   }
@@ -89,7 +89,7 @@ exports.createCarAbo = async (req, res) => {
     // If both are provided, add days to the provided date
     const baseDate = new Date(carAboPayload.availableFrom);
     baseDate.setDate(
-      baseDate.getDate() + parseInt(carAboPayload.availableInDays)
+      baseDate.getDate() + parseInt(carAboPayload.availableInDays),
     );
     carAboPayload.availableFrom = baseDate.toISOString().split("T")[0];
   }
@@ -102,27 +102,27 @@ exports.createCarAbo = async (req, res) => {
         if (Array.isArray(prices) && prices.length) {
           await db.CarAboPrice.bulkCreate(
             prices.map((price) => ({ ...price, carAboId: carAbo.id })),
-            { transaction }
+            { transaction },
           );
         }
 
         if (Array.isArray(colors) && colors.length) {
           await db.CarAboColor.bulkCreate(
             colors.map((color) => ({ ...color, carAboId: carAbo.id })),
-            { transaction }
+            { transaction },
           );
         }
 
         if (Array.isArray(media) && media.length) {
           await db.CarAboMedia.bulkCreate(
             media.map((m) => ({ ...m, carAboId: carAbo.id })),
-            { transaction }
+            { transaction },
           );
         }
 
         await carAbo.reload({ include: carAboIncludes, transaction });
         return carAbo;
-      }
+      },
     );
 
     return res.status(201).json(createdCarAbo);
@@ -190,7 +190,26 @@ exports.findAvailableCarAbos = async (req, res) => {
         [{ model: db.CarAboColor, as: "colors" }, "id", "ASC"],
       ],
     });
-    return res.status(200).json(carAbos);
+
+    // availableFrom berechnen, falls nur availableInDays gesetzt ist
+    const today = new Date();
+
+    const result = carAbos.map((carAbo) => {
+      const data = carAbo.toJSON(); // wichtig, damit wir ein plain object haben
+
+      if (
+        data.availableInDays != null &&
+        (data.availableFrom == null || data.availableFrom === "")
+      ) {
+        const baseDate = new Date(today);
+        baseDate.setDate(baseDate.getDate() + Number(data.availableInDays));
+        data.availableFrom = baseDate.toISOString().split("T")[0];
+      }
+
+      return data;
+    });
+
+    return res.status(200).json(result);
   } catch (error) {
     return res.status(500).send({ error: error.message });
   }
@@ -228,7 +247,7 @@ exports.updateCarAbo = async (req, res) => {
     // If both are provided, add days to the provided date
     const baseDate = new Date(carAboPayload.availableFrom);
     baseDate.setDate(
-      baseDate.getDate() + parseInt(carAboPayload.availableInDays)
+      baseDate.getDate() + parseInt(carAboPayload.availableInDays),
     );
     carAboPayload.availableFrom = baseDate.toISOString().split("T")[0];
   }
@@ -262,7 +281,7 @@ exports.updateCarAbo = async (req, res) => {
           transaction,
         });
         return reloaded;
-      }
+      },
     );
 
     return res.status(200).json(updatedCarAbo);
