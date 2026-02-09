@@ -53,8 +53,8 @@ async function generateContractPdf(contractInstance) {
       "fuehrerscheinnummer": contractInstance.User?.customerDetails?.driversLicenseNumber || "",
 
       // Vertragsdetails [cite: 24-37]
-      "mindestlaufzeit": `${contractInstance.duration} Monate`,
-      "kilometerleistung": `${contractInstance.mileage} km/Monat`,
+      "mindestlaufzeit": `${contractInstance.duration || ''} Monate`,
+      "kilometerleistung": `${contractInstance.mileage || ''} km/Monat`,
       "familyAndFriends": contractInstance.additionalDrivers || "Keine",
       
       // Kostenaufstellung [cite: 39-45]
