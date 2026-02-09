@@ -5,7 +5,10 @@ const path = require("path");
 async function generateContractPdf(contractInstance) {
   try {
     // 1. Pfade definieren
-    const templatePath = path.join(__dirname, "../../templates/contract/Auto-Abo-Mietvertrag.pdf");
+    const templatePath = path.join(
+      __dirname,
+      "../../templates/contract/Mietvertrag_vorlage.pdf",
+    );
     const outputDir = path.join(__dirname, "../../internal-files/contracts");
 
     if (!fs.existsSync(outputDir)) {
@@ -13,7 +16,9 @@ async function generateContractPdf(contractInstance) {
     }
 
     if (!fs.existsSync(templatePath)) {
-      throw new Error("PDF-Template wurde nicht gefunden unter: " + templatePath);
+      throw new Error(
+        "PDF-Template wurde nicht gefunden unter: " + templatePath,
+      );
     }
 
     // 2. PDF laden
@@ -23,50 +28,84 @@ async function generateContractPdf(contractInstance) {
 
     // --- Hilfsfunktionen für Berechnungen (Netto/Brutto gemäß 19% MwSt) ---
     const getNetto = (brutto) => (brutto ? parseFloat(brutto) / 1.19 : 0);
-    const getMwStAnteil = (brutto) => (brutto ? parseFloat(brutto) - (parseFloat(brutto) / 1.19) : 0);
+    const getMwStAnteil = (brutto) =>
+      brutto ? parseFloat(brutto) - parseFloat(brutto) / 1.19 : 0;
 
     const bruttoMiete = parseFloat(contractInstance.monthlyPrice || 0);
-    const bruttoHaftung = contractInstance.insurancePackage ? parseFloat(contractInstance.insuranceCosts || 0) : 0;
-    const bruttoLieferung = contractInstance.wantsDelivery ? parseFloat(contractInstance.deliveryCosts || 0) : 0;
+    const bruttoHaftung = contractInstance.insurancePackage
+      ? parseFloat(contractInstance.insuranceCosts || 0)
+      : 0;
+    const bruttoLieferung = contractInstance.wantsDelivery
+      ? parseFloat(contractInstance.deliveryCosts || 0)
+      : 0;
 
     // Summenbildung für die Kostenaufstellung [cite: 38-43]
-    const monatsgebuehrNettoGesamt = getNetto(bruttoMiete) + getNetto(bruttoHaftung);
-    const mwstGesamt = getMwStAnteil(bruttoMiete) + getMwStAnteil(bruttoHaftung);
+    const monatsgebuehrNettoGesamt =
+      getNetto(bruttoMiete) + getNetto(bruttoHaftung);
+    const mwstGesamt =
+      getMwStAnteil(bruttoMiete) + getMwStAnteil(bruttoHaftung);
     const monatsgebuehrBruttoGesamt = bruttoMiete + bruttoHaftung;
 
     // --- Daten-Mapping (Orientiert an den Quellen 1-47) ---
     const fields = {
       // Kopfdaten
-      "mietvertragNummer": contractInstance.id.toString(), // [cite: 1, 2]
-      "finNummer": contractInstance.vin || "", // 
+      mietvertragNummer: contractInstance.id.toString(), // [cite: 1, 2]
+      finNummer: contractInstance.carAbo.vin || "", //
 
       // Mieter Informationen [cite: 11-20]
-      "mandatsreferenzNummer": contractInstance.mandateReference || "",
-      "iban": contractInstance.iban || "",
-      "kontoinhaber": contractInstance.accountHolderName || "",
-      "strasse": `${contractInstance.User?.customerDetails?.street || ""} ${contractInstance.User?.customerDetails?.housenumber || ""}`,
-      "postleitzahl": contractInstance.User?.customerDetails?.postalCode || "",
-      "ort": contractInstance.User?.customerDetails?.city || "",
-      "geburtsdatum": contractInstance.User?.customerDetails?.birthday 
-        ? new Date(contractInstance.User.customerDetails.birthday).toLocaleDateString("de-DE") : "",
-      "personalausweisnummer": contractInstance.User?.customerDetails?.IdCardNumber || "",
-      "fuehrerscheinnummer": contractInstance.User?.customerDetails?.driversLicenseNumber || "",
+      mandatsreferenzNummer: contractInstance.mandateReference || "",
+      iban: contractInstance.iban || "",
+      kontoinhaber: contractInstance.accountHolderName || "",
+      strasse: `${contractInstance.User?.customerDetails?.street || ""} ${contractInstance.User?.customerDetails?.housenumber || ""}`,
+      postleitzahl: contractInstance.User?.customerDetails?.postalCode || "",
+      ort: contractInstance.User?.customerDetails?.city || "",
+      geburtsdatum: contractInstance.User?.customerDetails?.birthday
+        ? new Date(
+            contractInstance.User.customerDetails.birthday,
+          ).toLocaleDateString("de-DE")
+        : "",
+      personalausweisnummer:
+        contractInstance.User?.customerDetails?.IdCardNumber || "",
+      fuehrerscheinnummer:
+        contractInstance.User?.customerDetails?.driversLicenseNumber || "",
 
       // Vertragsdetails [cite: 24-37]
-      "mindestlaufzeit": `${contractInstance.duration || ''} Monate`,
-      "kilometerleistung": `${contractInstance.mileage || ''} km/Monat`,
-      "familyAndFriends": contractInstance.additionalDrivers || "Keine",
-      
+      mindestlaufzeit: `${contractInstance.duration || ""} Monate`,
+      kilometerleistung: `${contractInstance.price.mileageKm || ""} km/Monat`,
+      familyAndFriends:
+        contractInstance.familyAndFriendsMembers.map((member) => {
+          return (
+            member.firstName +
+            " " +
+            member.lastName +
+            ", " +
+            new Date(member.birthday).toLocaleDateString("de-DE")
+          );
+        }) || "Keine",
+
       // Kostenaufstellung [cite: 39-45]
-      "nettoMietgebuehrMonatlich": getNetto(bruttoMiete).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      "haftungsreduzierungNettoMonatlich": getNetto(bruttoHaftung).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      "monatsgebuehrBrutto": monatsgebuehrNettoGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      "steuern": mwstGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      "monatsgebuehrBrutto": monatsgebuehrBruttoGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      "lieferkosten": bruttoLieferung.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      "anzahlung": (contractInstance.deposit || 0).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      
-      "ortDatum": `Waldkirch, den ${new Date().toLocaleDateString("de-DE")}`, // [cite: 46]
+      nettoMietgebuehrMonatlich: getNetto(bruttoMiete).toLocaleString("de-DE", {
+        minimumFractionDigits: 2,
+      }),
+      haftungsreduzierungNettoMonatlich: getNetto(bruttoHaftung).toLocaleString(
+        "de-DE",
+        { minimumFractionDigits: 2 },
+      ),
+      monatsgebuehrBrutto: monatsgebuehrNettoGesamt.toLocaleString("de-DE", {
+        minimumFractionDigits: 2,
+      }),
+      steuern: mwstGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      monatsgebuehrBrutto: monatsgebuehrBruttoGesamt.toLocaleString("de-DE", {
+        minimumFractionDigits: 2,
+      }),
+      lieferkosten: bruttoLieferung.toLocaleString("de-DE", {
+        minimumFractionDigits: 2,
+      }),
+      anzahlung: (contractInstance.deposit || 0).toLocaleString("de-DE", {
+        minimumFractionDigits: 2,
+      }),
+
+      ortDatum: `Waldkirch, den ${new Date().toLocaleDateString("de-DE")}`, // [cite: 46]
     };
 
     // Textfelder befüllen
@@ -83,7 +122,8 @@ async function generateContractPdf(contractInstance) {
     const setCheck = (name, condition) => {
       try {
         const cb = form.getCheckBox(name);
-        if (condition) cb.check(); else cb.uncheck();
+        if (condition) cb.check();
+        else cb.uncheck();
       } catch (e) {
         // Fallback falls die Felder als Textfelder (☐) definiert sind
         try {
@@ -107,7 +147,6 @@ async function generateContractPdf(contractInstance) {
 
     fs.writeFileSync(fullPath, pdfBytes);
     return fileName;
-
   } catch (error) {
     console.error("Fehler bei der PDF-Generierung:", error);
     throw error;
