@@ -427,7 +427,12 @@ exports.generateContract = async (req, res) => {
     res.json({ success: true, file: pdfFileName });
   } catch (err) {
     console.log(err);
-    res.status(500).json({ error: "PDF konnte nicht erstellt werden" });
+    res
+      .status(500)
+      .json({
+        error: "PDF konnte nicht erstellt werden",
+        errorMessage: JSON.stringify(err),
+      });
   }
 };
 
