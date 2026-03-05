@@ -61,8 +61,8 @@ async function generateContractPdf(contractInstance) {
       ort: contractInstance.User?.customerDetails?.city || "",
       geburtsdatum: contractInstance.User?.customerDetails?.birthday
         ? new Date(
-            contractInstance.User.customerDetails.birthday,
-          ).toLocaleDateString("de-DE")
+          contractInstance.User.customerDetails.birthday,
+        ).toLocaleDateString("de-DE")
         : "",
       personalausweisnummer:
         contractInstance.User?.customerDetails?.IdCardNumber || "",
@@ -72,6 +72,14 @@ async function generateContractPdf(contractInstance) {
       // Vertragsdetails [cite: 24-37]
       mindestlaufzeit: `${contractInstance.duration || ""} Monate`,
       kilometerleistung: `${contractInstance.price.mileageKm || ""} km/Monat`,
+
+      'selbstbeteiligung-vollkasko': contractInstance.insuranceDeductibleHaftpflicht.toLocaleString("de-DE", {
+        minimumFractionDigits: 2,
+      }),
+      'selbstbeteiligung-teilkasko': contractInstance.insuranceDeductibleTeilkasko.toLocaleString(
+        "de-DE",
+        { minimumFractionDigits: 2 },
+      ),
       familyAndFriends:
         contractInstance.familyAndFriendsMembers.map((member) => {
           return (

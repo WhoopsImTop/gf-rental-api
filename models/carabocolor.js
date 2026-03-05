@@ -42,23 +42,33 @@ module.exports = (sequelize, DataTypes) => {
       internalId: DataTypes.STRING,
 
       // Virtual field to calculate `availableFrom`
+      // Im CarAboColor Model
       calculatedAvailableFrom: {
         type: DataTypes.VIRTUAL,
         get() {
-          const availableFrom = this.availableFrom;
-          const days = this.availableInDays;
+          const availableFrom = this.getDataValue("availableFrom");
+          const days = this.getDataValue("availableInDays");
 
-          // Wenn es kein Basisdatum gibt → null zurück
-          if (!availableFrom) return null;
+          let baseDate;
 
-          // Wenn days nicht gesetzt ist oder 0 → einfach Basisdatum zurück
-          if (!days || days === 0) return availableFrom;
+          // Logik 1 & 2: availableFrom ist vorhanden
+          if (availableFrom) {
+            baseDate = new Date(availableFrom);
+          }
+          // Logik 3: Nur availableInDays ist vorhanden -> Heute als Basis
+          else if (days !== null && days !== undefined) {
+            baseDate = new Date();
+          }
+          else {
+            return null;
+          }
 
-          // Hier berechnen wir availableFrom + days
-          const date = new Date(availableFrom);
-          date.setDate(date.getDate() + days);
+          // Tage addieren (auch wenn days 0 ist)
+          if (days !== null && days !== undefined) {
+            baseDate.setDate(baseDate.getDate() + Number(days));
+          }
 
-          return date;
+          return baseDate.toISOString().split("T")[0]; // Format: YYYY-MM-DD
         },
       },
     },
@@ -69,3 +79,5 @@ module.exports = (sequelize, DataTypes) => {
   );
   return CarAboColor;
 };
+
+

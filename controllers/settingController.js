@@ -9,6 +9,24 @@ exports.findSetting = async (req, res) => {
   }
 };
 
+exports.findInsurance = async (req, res) => {
+  try {
+    const setting = await db.Setting.findOne();
+    return res.status(200).json({
+      basicInsurancePrice: setting.basicInsurancePrice,
+      premiumInsurancePrice: setting.premiumInsurancePrice,
+      standardDeductibleHaftpflicht: setting.standardDeductibleHaftpflicht,
+      standardDeductibleTeilkasko: setting.standardDeductibleTeilkasko,
+      basicDeductibleHaftpflicht: setting.basicDeductibleHaftpflicht,
+      basicDeductibleTeilkasko: setting.basicDeductibleTeilkasko,
+      premiumDeductibleHaftpflicht: setting.premiumDeductibleHaftpflicht,
+      premiumDeductibleTeilkasko: setting.premiumDeductibleTeilkasko,
+    });
+  } catch (error) {
+    return res.status(500).send({ error: error.message });
+  }
+};
+
 exports.updateSetting = async (req, res) => {
   try {
     console.log(req.body)

@@ -3,7 +3,7 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn("Contracts", "pickupLocationName", {
+    /* await queryInterface.addColumn("Contracts", "pickupLocationName", {
       type: Sequelize.STRING,
       allowNull: true,
     });
@@ -14,7 +14,7 @@ module.exports = {
     await queryInterface.addColumn("Contracts", "pickupLocationLng", {
       type: Sequelize.TEXT,
       allowNull: true,
-    });
+    }); */
   },
 
   async down(queryInterface, Sequelize) {

@@ -128,7 +128,6 @@ exports.loginUser = async (req, res) => {
 
   try {
     const emailHash = createHash(email);
-    console.log(emailHash);
     // Benutzer anhand der Email suchen
     const user = await User.scope("withPassword").findOne({
       where: { emailHash },
@@ -136,7 +135,8 @@ exports.loginUser = async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
-
+    console.log(password);
+    console.log(user);
     // Passwort prüfen
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
@@ -193,8 +193,6 @@ exports.cantamenAuth = async (req, res) => {
       authData.id
     );
 
-    console.log("Cantamen User Data:", userData);
-
     // 1. Prüfen ob User existiert
     const emailHash = createHash(userData.emailAddress);
     let user = await User.scope("withPassword").findOne({
@@ -202,8 +200,7 @@ exports.cantamenAuth = async (req, res) => {
     });
 
     if (!user) {
-      const randomPassword = Math.random().toString(36).slice(-8);
-      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+      const hashedPassword = await bcrypt.hash(password, 10);
 
       user = await User.create({
         firstName: userData.prename,
@@ -211,14 +208,14 @@ exports.cantamenAuth = async (req, res) => {
         email: userData.emailAddress,
         phone: userData.mobilePhoneNr,
         emailHash: emailHash,
-        passwordHash: hashedPassword, // Dummy
+        passwordHash: hashedPassword,
         role: "CUSTOMER",
       });
     }
 
     //update Cart
     const cartData = await Cart.update(
-      { userId: user.id },
+      { userId: user.id, syncedByCantamen: true },
       { where: { id: req.body.cartId } },
     );
 

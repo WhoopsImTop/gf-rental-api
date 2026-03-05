@@ -36,6 +36,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
       },
+      syncedByCantamen: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
+      //virtual field if user was synced from cantamen
     },
     {
       sequelize,

@@ -164,6 +164,8 @@ exports.createContract = async (req, res) => {
         ],
       });
 
+      const syncedByCantamen = Cart.syncedByCantamen || false;
+
       let selectedPrice = null;
 
       if (Cart.priceId && Cart.car && Cart.car.prices) {
@@ -186,7 +188,10 @@ exports.createContract = async (req, res) => {
           totalCost: contractData.totalCost,
           startingDate: contractData.startingDate,
           insurancePackage: contractData.insurancePackage || false,
+          insuranceType: contractData.insuranceType || "none",
           insuranceCosts: contractData.insuranceCosts || 0,
+          insuranceDeductibleHaftpflicht: contractData.insuranceDeductibleHaftpflicht || null,
+          insuranceDeductibleTeilkasko: contractData.insuranceDeductibleTeilkasko || null,
           familyAndFriends: contractData.familyAndFriends || false,
           familyAndFriendsCosts: contractData.familyAndFriendsCosts || 0,
           familyAndFriendsMembers: contractData.familyAndFriendsMembers || [],
@@ -211,11 +216,12 @@ exports.createContract = async (req, res) => {
           duration: duration,
           monthlyPrice: monthlyPrice,
           totalCost: totalCost,
-          orderCompleted: false,
+          orderCompleted: true,
           carAboId: Cart.carAboId,
           colorId: Cart.colorId,
           priceId: Cart.priceId,
           withDeposit: Cart.withDeposit,
+          syncedByCantamen: syncedByCantamen,
           lat: lat,
           lng: lon,
         },
@@ -279,44 +285,52 @@ exports.createContract = async (req, res) => {
 <p>Hallo ${user.firstName + "," ?? ""}</p>
       <p>Hiermit bestätigen wir Ihr Abo Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
       <p><strong>Um die Übergabe zu erleichtern, schicken Sie uns Bitte eine Kopie der Vorder- und Rückseite ihres Personalausweises und Führerscheins zu.</strong></p>
-      <p><a href="mailto:info@gruene-flotte-auto-abo.de" style="display: inline-block; background-color: #82ba26; padding: 8px 16px; border-radius: 12px; color: #ffffff; text-decoration: none; font-weight: 900;">info@gruene-flotte-auto-abo.de</a></p>
+      <p><a href="mailto:autoabo@gruene-flotte.com" style="display: inline-block; background-color: #82ba26; padding: 8px 16px; border-radius: 12px; color: #ffffff; text-decoration: none; font-weight: 900;">autoabo@gruene-flotte.com</a></p>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Ihre Daten</h2>
       <table style="width: 100%; border: 1px solid #efefef;">
         <tbody>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.firstName}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.lastName}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.street} ${
-            user.customerDetails.housenumber
-          }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.street} ${user.customerDetails.housenumber
+        }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">PLZ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.postalCode}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.city}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Telefon</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.phone}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Email</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.email}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            contract.startingDate
-              ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
-                  day: "numeric",
-                  month: "long",
-                  year: "2-digit",
-                })
-              : "-"
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Sicherheitspaket</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            contract.insurancePackage ? "Ja" : "Nein"
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.duration} ${
-            contract.duration > 1 ? "Monate" : "Monat"
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Führerscheinnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            user.customerDetails.driversLicenseNumber
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            user.customerDetails.IdCardNumber
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0;">Monatliche Rate</td><td style="padding: 8px 16px; margin: 0;">${contract.monthlyPrice} €</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.startingDate
+          ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
+            day: "numeric",
+            month: "long",
+            year: "2-digit",
+          })
+          : "-"
+        }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Sicherheitspaket</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.insuranceType === "premium" ? "Premium" : (contract.insuranceType === "basic" ? "Basic" : (contract.insurancePackage ? "Ja" : "Nein"))
+        }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.duration} ${contract.duration > 1 ? "Monate" : "Monat"
+        }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Führerscheinnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.driversLicenseNumber
+        }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.IdCardNumber
+        }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Monatliche Rate</td><td style="padding: 8px 16px; margin: 0;border-bottom: 1px solid #efefef">${contract.monthlyPrice} €</td></tr>
+        ${contract.withDeposit ? `<tr><td style="padding: 8px 16px; margin: 0;">Anzahlung (Einmalig)</td><td style="padding: 8px 16px; margin: 0;">1500 €</td></tr>` : ''
+        }
         </tbody>
       </table>
+      <hr style="margin: 10px; border: 1px solid #efefef;"/>
+      <h2 style="font-weight: 900; margin: 0; padding: 0;">Nächste Schritte</h2>
+        <ol style="padding-left: 15px">
+          ${contract.syncedByCantamen ? '' : '<li><strong>Bitte senden Sie uns eine Kopie Ihres Personalausweises und Führerscheins</strong><br>Bitte senden Sie die Dateien an folgende E-Mail-Adresse: <a style="color: #82ba26" href="mailto:autoabo@gruene-flotte.com">autoabo@gruene-flotte.com</a></li>'}
+          <li><strong>Vertrag und Übergabe</strong><br>
+          Wir überprüfen Ihre Angaben und senden Ihnen Ihren Vertrag und das Bestätigte Übergabedatum zu.</li>
+          <li><strong>Vertragsunterschrift</strong><br>Bitte senden Sie uns den Vertrag unterschrieben zurück.</li>
+          ${contract.withDeposit ? '<li><strong>Abbuchung der Anzahlung</strong><br>Wir werden Ihre Anzahlung ein paar Tage vor Übergabe des Fahrzeuges abbuchen.</li>' : ''}
+          <li><strong>Übergabe Ihres Fahrzeuges</strong><br>
+          Bei der Übergabe muss Führerschein und Personalausweis in Original vorgelegt werden.</li>
+        </ol>
+      <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <p>Die erste Rate wird in den nächsten Tagen von deinem Konto abgebucht.</p>
       <p>Bei Fragen stehen wir Ihnen jederzeit gerne zur Verfügung.</p>
       <p style="margin-bottom:0">Wir wünschen Ihnen viel Spaß mit Ihrem neuen Auto Abo.<br>

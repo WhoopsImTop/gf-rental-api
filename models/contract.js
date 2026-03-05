@@ -98,6 +98,18 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
       },
+      insuranceType: {
+        type: DataTypes.STRING,
+        defaultValue: "none",
+      },
+      insuranceDeductibleHaftpflicht: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
+      insuranceDeductibleTeilkasko: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
       insuranceCosts: {
         type: DataTypes.DECIMAL,
       },
@@ -219,6 +231,10 @@ module.exports = (sequelize, DataTypes) => {
       pickupLocationName: { type: DataTypes.STRING },
       pickupLocationLat: { type: DataTypes.TEXT },
       pickupLocationLng: { type: DataTypes.TEXT },
+      syncedByCantamen: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
       createdAt: {
         type: DataTypes.DATE,
       },

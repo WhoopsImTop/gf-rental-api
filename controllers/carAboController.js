@@ -191,46 +191,7 @@ exports.findAvailableCarAbos = async (req, res) => {
       ],
     });
 
-    const today = new Date();
-
-    const result = carAbos.map((carAbo) => {
-      const data = carAbo.toJSON();
-
-      if (data.colors && Array.isArray(data.colors)) {
-        data.colors = data.colors.map((color) => {
-          const c = { ...color };
-
-          let calculatedDate = null;
-
-          // 1. Beide existieren → availableFrom + availableInDays
-          if (c.availableFrom != null && c.availableInDays != null) {
-            const baseDate = new Date(c.availableFrom);
-            baseDate.setDate(baseDate.getDate() + Number(c.availableInDays));
-            calculatedDate = baseDate;
-          }
-          // 2. Nur availableFrom existiert
-          else if (c.availableFrom != null) {
-            calculatedDate = new Date(c.availableFrom);
-          }
-          // 3. Nur availableInDays existiert (auch 0!)
-          else if (c.availableInDays != null) {
-            const baseDate = new Date(today);
-            baseDate.setDate(baseDate.getDate() + Number(c.availableInDays));
-            calculatedDate = baseDate;
-          }
-
-          c.calculatedAvailableFrom = calculatedDate
-            ? calculatedDate.toISOString().split("T")[0]
-            : null;
-
-          return c;
-        });
-      }
-
-      return data;
-    });
-
-    return res.status(200).json(result);
+    return res.status(200).json(carAbos);
   } catch (error) {
     return res.status(500).send({ error: error.message });
   }
