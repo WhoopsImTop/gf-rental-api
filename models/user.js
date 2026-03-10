@@ -76,6 +76,22 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
         allowNull: true,
       },
+      mfaEnabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      mfaSecret: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        set(value) {
+          this.setDataValue("mfaSecret", value ? encrypt(value) : null);
+        },
+        get() {
+          const value = this.getDataValue("mfaSecret");
+          return value ? decrypt(value) : null;
+        },
+      },
       role: DataTypes.ENUM("CUSTOMER", "ADMIN", "SELLER"),
       createdAt: {
         allowNull: false,
@@ -98,7 +114,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       scopes: {
         withPassword: {
-          attributes: { include: ["passwordHash", "role"] },
+          attributes: { include: ["passwordHash", "role", "mfaEnabled", "mfaSecret"] },
         },
       },
     }

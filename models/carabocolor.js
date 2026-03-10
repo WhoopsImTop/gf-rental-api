@@ -40,6 +40,10 @@ module.exports = (sequelize, DataTypes) => {
       availableInDays: DataTypes.INTEGER,
       isOrdered: DataTypes.BOOLEAN,
       internalId: DataTypes.STRING,
+      vin: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
 
       // Virtual field to calculate `availableFrom`
       // Im CarAboColor Model

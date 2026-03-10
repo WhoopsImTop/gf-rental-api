@@ -120,7 +120,7 @@ exports.createCarAbo = async (req, res) => {
           );
         }
 
-        await carAbo.reload({ include: carAboIncludes, transaction });
+        await carAbo.reload({ include: carAboAdminIncludes, transaction });
         return carAbo;
       },
     );
@@ -259,7 +259,7 @@ exports.updateCarAbo = async (req, res) => {
 
         const reloaded = await db.CarAbo.findOne({
           where: { id },
-          include: carAboIncludes,
+          include: carAboAdminIncludes,
           transaction,
         });
         return reloaded;

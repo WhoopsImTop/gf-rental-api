@@ -50,7 +50,7 @@ async function generateContractPdf(contractInstance) {
     const fields = {
       // Kopfdaten
       mietvertragNummer: contractInstance.id.toString(), // [cite: 1, 2]
-      finNummer: contractInstance.carAbo.vin || "", //
+      finNummer: contractInstance.color?.vin || "", //
 
       // Mieter Informationen [cite: 11-20]
       mandatsreferenzNummer: contractInstance.mandateReference || "",

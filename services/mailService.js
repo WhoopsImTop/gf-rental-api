@@ -42,6 +42,37 @@ exports.sendOtpEmail = async (email, code) => {
   console.log("Message sent: %s", info.messageId);
 };
 
+exports.sendPasswordResetEmail = async (email, code) => {
+  if (!process.env.SMTP_HOST) {
+    console.log(`[DEV MODE] Password reset code for ${email}: ${code}`);
+    return;
+  }
+
+  const htmlContent = exports.generateEmailHtml(
+    "Passwort zurücksetzen",
+    `<p style="margin: 0; padding: 0;">Du hast eine Anfrage zum Zurücksetzen deines Passworts gestellt.</p>
+    <br>
+    <p style="margin: 0; padding: 0;">Dein Code zum Zurücksetzen lautet:</p>
+    <p style="margin: 10px 0; padding: 12px 20px; background-color: #f5f5f5; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 4px; text-align: center;">${code}</p>
+    <p style="margin: 0; padding: 0;"><span style="font-size: 12px; color: #666666;">Dieser Code ist 10 Minuten gültig.</span></p>
+    <br>
+    <p style="margin: 0; padding: 0;">Falls du kein neues Passwort angefordert hast, kannst du diese E-Mail ignorieren. Dein Passwort bleibt unverändert.</p>
+    <br>
+    <p style="margin: 0; padding: 0;"><strong>Mit freundlichen Grüßen</strong></p>
+    <p style="margin: 0; padding: 0;">Dein Grüne Flotte Team</p>`,
+  );
+
+  const info = await transporter.sendMail({
+    from: '"Grüne Flotte" <info@gruene-flotte-autoabo.de>',
+    to: email,
+    subject: "Passwort zurücksetzen – Dein Code",
+    text: `Du hast eine Anfrage zum Zurücksetzen deines Passworts gestellt. Dein Code lautet: ${code}. Dieser Code ist 10 Minuten gültig.`,
+    html: htmlContent,
+  });
+
+  console.log("Password reset email sent: %s", info.messageId);
+};
+
 exports.sendErrorEmail = async (message) => {
   try {
     const info = await transporter.sendMail({

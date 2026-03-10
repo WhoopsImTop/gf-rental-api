@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const { sequelize } = require("./models");
 
 //import routes
@@ -19,6 +21,7 @@ const settingRoute = require("./routes/settingRoute");
 
 const reviewRoute = require("./routes/website/reviewRoute");
 const contractRoute = require("./routes/contractRoute");
+const analyticsRoute = require("./routes/analyticsRoute");
 
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
 const { authenticateToken } = require("./middleware/authMiddleware");
@@ -27,7 +30,10 @@ const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
 
 const corsOptions = {
-  origin: "*", // Erlaube alle Ursprünge
+  origin: function (origin, callback) {
+    callback(null, origin || "*");
+  },
+  credentials: true,
   methods: ["GET", "POST", "PATCH", "DELETE"], // Erlaubte HTTP-Methoden
   allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
 };
@@ -39,6 +45,13 @@ app.use("/public", cors(corsOptions), express.static("public"));
 // Weitere Routen und Middleware
 app.use(cors(corsOptions)); // Gilt für die anderen Routen
 app.use(bodyParser.json());
+app.use(helmet());
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: "Too many requests from this IP, please try again later"
+});
 
 // Allgemeine Fehlerbehandlung
 app.use((err, req, res, next) => {
@@ -52,7 +65,7 @@ app.get("/", (req, res) => {
 });
 
 // Routen
-app.use("/api/auth", AuthentificationRoute);
+app.use("/api/auth", authLimiter, AuthentificationRoute);
 app.use("/api/users", authenticateToken, userRoute);
 app.use("/api/car-abos", carAboRoute);
 app.use("/api/brands", brandRoute);
@@ -71,6 +84,7 @@ app.use("/api/crm/status", statusRoute);
 
 //Website-Routen (öffentlich)
 app.use("/api/reviews", reviewRoute);
+app.use("/api/analytics", analyticsRoute);
 
 // Server starten und Datenbankverbindung prüfen
 app.listen(serverPort, async () => {

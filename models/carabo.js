@@ -72,7 +72,6 @@ module.exports = (sequelize, DataTypes) => {
       model: DataTypes.STRING,
       milage: DataTypes.INTEGER,
       modelYear: DataTypes.INTEGER,
-      vin: DataTypes.STRING,
       status: DataTypes.ENUM("available", "reserved", "unavailable"),
       offerType: DataTypes.ENUM("subscription", "purchase"),
       mediaId: DataTypes.INTEGER,

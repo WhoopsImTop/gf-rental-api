@@ -63,6 +63,8 @@ exports.createContract = async (req, res) => {
     cartId,
   } = req.body;
 
+  userId = req.user.id;
+
   try {
     const result = await db.sequelize.transaction(async (transaction) => {
       if (!userId) {
@@ -379,6 +381,13 @@ exports.archiveContract = async (req, res) => {
   const id = req.params.id;
   try {
     let contract = await db.Contract.findOne({ where: { id } });
+    if (!contract) {
+      return res.status(404).json({ success: false, message: "Contract not found" });
+    }
+    if (contract.userId !== req.user.id && req.user.role !== "ADMIN" && req.user.role !== "SELLER") {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
     let isArchivedContract = contract.archived;
     let updatedArchivedValue = !isArchivedContract;
     let updatedContract = await db.Contract.update(
@@ -520,6 +529,14 @@ exports.shareContractFile = async (req, res) => {
 exports.deleteContract = async (req, res) => {
   const id = req.params.id;
   try {
+    let contract = await db.Contract.findOne({ where: { id } });
+    if (!contract) {
+      return res.status(404).json({ message: "Contract not found" });
+    }
+    if (contract.userId !== req.user.id && req.user.role !== "ADMIN" && req.user.role !== "SELLER") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     let deletedContract = await db.Contract.destroy({ where: { id } });
     res.status(201).json({
       message: "Contract deleted successfully",
