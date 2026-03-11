@@ -63,8 +63,6 @@ exports.createContract = async (req, res) => {
     cartId,
   } = req.body;
 
-  userId = req.user.id;
-
   try {
     const result = await db.sequelize.transaction(async (transaction) => {
       if (!userId) {
