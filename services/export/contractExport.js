@@ -71,17 +71,17 @@ async function generateContractPdf(contractInstance) {
 
       // Vertragsdetails [cite: 24-37]
       mindestlaufzeit: `${contractInstance.duration || ""} Monate`,
-      kilometerleistung: `${contractInstance.price.mileageKm || ""} km/Monat`,
+      kilometerleistung: `${contractInstance.price?.mileageKm || ""} km/Monat`,
 
-      'selbstbeteiligung-vollkasko': contractInstance.insuranceDeductibleHaftpflicht.toLocaleString("de-DE", {
+      'selbstbeteiligung-vollkasko': (contractInstance.insuranceDeductibleHaftpflicht || 0).toLocaleString("de-DE", {
         minimumFractionDigits: 2,
       }),
-      'selbstbeteiligung-teilkasko': contractInstance.insuranceDeductibleTeilkasko.toLocaleString(
+      'selbstbeteiligung-teilkasko': (contractInstance.insuranceDeductibleTeilkasko || 0).toLocaleString(
         "de-DE",
         { minimumFractionDigits: 2 },
       ),
       familyAndFriends:
-        contractInstance.familyAndFriendsMembers.map((member) => {
+        contractInstance.familyAndFriendsMembers?.map((member) => {
           return (
             member.firstName +
             " " +
@@ -89,7 +89,7 @@ async function generateContractPdf(contractInstance) {
             ", " +
             new Date(member.birthday).toLocaleDateString("de-DE")
           );
-        }) || "Keine",
+        }).join("\n") || "Keine",
 
       // Kostenaufstellung [cite: 39-45]
       nettoMietgebuehrMonatlich: getNetto(bruttoMiete).toLocaleString("de-DE", {
@@ -99,7 +99,7 @@ async function generateContractPdf(contractInstance) {
         "de-DE",
         { minimumFractionDigits: 2 },
       ),
-      monatsgebuehrBrutto: monatsgebuehrNettoGesamt.toLocaleString("de-DE", {
+      monatsgebuehrNetto: monatsgebuehrNettoGesamt.toLocaleString("de-DE", {
         minimumFractionDigits: 2,
       }),
       steuern: mwstGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
