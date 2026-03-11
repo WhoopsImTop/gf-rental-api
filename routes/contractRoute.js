@@ -14,7 +14,7 @@ router.get(
   contractController.shareContractFile
 );
 router.get("/", authenticateToken, contractController.getAllContracts);
-router.post("/", authenticateToken, contractController.createContract);
+router.post("/", contractController.createContract);
 router.post("/generate-pdf/:id", contractController.generateContract);
 router.patch(
   "/archive/:id",
