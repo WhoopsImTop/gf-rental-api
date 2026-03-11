@@ -91,9 +91,9 @@ exports.getStats = async (req, res) => {
     const bounceRate = totalHits > 0 ? ((bounces / totalHits) * 100).toFixed(1) : 0;
 
     const avgDurationRow = await PageVisit.findOne({
-        attributes: [
-            [sequelize.fn('AVG', sequelize.col('duration_seconds')), 'average_duration']
-        ]
+      attributes: [
+        [sequelize.fn('AVG', sequelize.col('duration_seconds')), 'average_duration']
+      ]
     });
     const averageDuration = avgDurationRow ? parseFloat(avgDurationRow.get('average_duration') || 0).toFixed(0) : 0;
 

@@ -18,6 +18,7 @@ const cartRoute = require("./routes/cartRoute");
 const deliveryCostsRoute = require("./routes/deliveryCosts");
 const emailRoute = require("./routes/emailRoute");
 const settingRoute = require("./routes/settingRoute");
+const contactRoute = require("./routes/website/contactRoute");
 
 const reviewRoute = require("./routes/website/reviewRoute");
 const contractRoute = require("./routes/contractRoute");
@@ -85,6 +86,7 @@ app.use("/api/crm/status", statusRoute);
 //Website-Routen (öffentlich)
 app.use("/api/reviews", reviewRoute);
 app.use("/api/analytics", analyticsRoute);
+app.use("/api/business/contact", contactRoute);
 
 // Server starten und Datenbankverbindung prüfen
 app.listen(serverPort, async () => {
