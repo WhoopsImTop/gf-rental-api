@@ -51,6 +51,7 @@ async function generateContractPdf(contractInstance) {
       // Kopfdaten
       mietvertragNummer: contractInstance.id.toString(), // [cite: 1, 2]
       finNummer: contractInstance.color?.vin || "", //
+      cantamenKundennummer: contractInstance.User?.cantamenCustomerId || "",
 
       // Mieter Informationen [cite: 11-20]
       mandatsreferenzNummer: contractInstance.mandateReference || "",
@@ -72,6 +73,11 @@ async function generateContractPdf(contractInstance) {
       // Vertragsdetails [cite: 24-37]
       mindestlaufzeit: `${contractInstance.duration || ""} Monate`,
       kilometerleistung: `${contractInstance.price?.mileageKm || ""} km/Monat`,
+      freikilometer: `${contractInstance.price?.mileageKm || ""} km/Monat`,
+      mehrkilometer: "",
+      mehrkilometerMultiplikator: "",
+      kilometerstandAnkunft: "",
+      kilometerstandAbfahrt: "",
 
       'selbstbeteiligung-vollkasko': (contractInstance.insuranceDeductibleHaftpflicht || 0).toLocaleString("de-DE", {
         minimumFractionDigits: 2,
@@ -80,40 +86,34 @@ async function generateContractPdf(contractInstance) {
         "de-DE",
         { minimumFractionDigits: 2 },
       ),
-      familyAndFriends:
-        contractInstance.familyAndFriendsMembers?.map((member) => {
-          return (
-            member.firstName +
-            " " +
-            member.lastName +
-            ", " +
-            new Date(member.birthday).toLocaleDateString("de-DE")
-          );
-        }).join("\n") || "Keine",
+
+      familyAndFriends: contractInstance.familyAndFriendsMembers && contractInstance.familyAndFriendsMembers.length > 0
+        ? `${contractInstance.familyAndFriendsMembers[0].firstName} ${contractInstance.familyAndFriendsMembers[0].lastName}, ${new Date(contractInstance.familyAndFriendsMembers[0].birthday).toLocaleDateString("de-DE")}`
+        : "Keine",
+      'familyAndFriends 2': contractInstance.familyAndFriendsMembers && contractInstance.familyAndFriendsMembers.length > 1
+        ? `${contractInstance.familyAndFriendsMembers[1].firstName} ${contractInstance.familyAndFriendsMembers[1].lastName}, ${new Date(contractInstance.familyAndFriendsMembers[1].birthday).toLocaleDateString("de-DE")}`
+        : "",
+      'familyAndFriends 3': contractInstance.familyAndFriendsMembers && contractInstance.familyAndFriendsMembers.length > 2
+        ? `${contractInstance.familyAndFriendsMembers[2].firstName} ${contractInstance.familyAndFriendsMembers[2].lastName}, ${new Date(contractInstance.familyAndFriendsMembers[2].birthday).toLocaleDateString("de-DE")}`
+        : "",
 
       // Kostenaufstellung [cite: 39-45]
-      nettoMietgebuehrMonatlich: getNetto(bruttoMiete).toLocaleString("de-DE", {
-        minimumFractionDigits: 2,
-      }),
-      haftungsreduzierungNettoMonatlich: getNetto(bruttoHaftung).toLocaleString(
-        "de-DE",
-        { minimumFractionDigits: 2 },
-      ),
-      monatsgebuehrNetto: monatsgebuehrNettoGesamt.toLocaleString("de-DE", {
-        minimumFractionDigits: 2,
-      }),
-      steuern: mwstGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      monatsgebuehrBrutto: monatsgebuehrBruttoGesamt.toLocaleString("de-DE", {
-        minimumFractionDigits: 2,
-      }),
-      lieferkosten: bruttoLieferung.toLocaleString("de-DE", {
-        minimumFractionDigits: 2,
-      }),
-      anzahlung: (contractInstance.deposit || 0).toLocaleString("de-DE", {
-        minimumFractionDigits: 2,
-      }),
+      invoiceCarName: contractInstance.carAbo?.displayName || "",
+      InvoiceSavetyPackageName: contractInstance.insuranceType === "premium" ? "Premium" : (contractInstance.insuranceType === "basic" ? "Basic" : "Standard"),
 
-      ortDatum: `Waldkirch, den ${new Date().toLocaleDateString("de-DE")}`, // [cite: 46]
+      invoiceCarMonthlyNetto: getNetto(bruttoMiete).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      InvoiceSavetyPackageNetto: getNetto(bruttoHaftung).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+
+      invoiceCarVat: getMwStAnteil(bruttoMiete).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      InvoiceSavetyPackageVat: getMwStAnteil(bruttoHaftung).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+
+      InvoiceCarMonthlyBrutto: bruttoMiete.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      InvoiceSavetyPackageBrutto: bruttoHaftung.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+
+      InvoiceDeliveryCosts: bruttoLieferung.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      InvoiceDepositPayment: (contractInstance.withDeposit ? 1500 : 0).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+
+      MonthlyTotalBrutto: monatsgebuehrBruttoGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
     };
 
     // Textfelder befüllen

@@ -93,6 +93,7 @@ module.exports = (sequelize, DataTypes) => {
         },
       },
       role: DataTypes.ENUM("CUSTOMER", "ADMIN", "SELLER"),
+      cantamenCustomerId: DataTypes.STRING,
       createdAt: {
         allowNull: false,
         type: DataTypes.DATE,

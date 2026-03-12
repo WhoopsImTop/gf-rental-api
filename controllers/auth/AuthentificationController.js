@@ -421,10 +421,14 @@ exports.cantamenAuth = async (req, res) => {
         lastName: userData.name,
         email: userData.emailAddress,
         phone: userData.mobilePhoneNr,
+        cantamenCustomerId: userData.customerNumber,
         emailHash: emailHash,
         passwordHash: hashedPassword,
         role: "CUSTOMER",
       });
+    } else if (!user.cantamenCustomerId && userData.customerNumber) {
+      //update customer
+      await user.update({ cantamenCustomerId: userData.customerNumber });
     }
 
     //update Cart
