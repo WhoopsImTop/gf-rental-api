@@ -7,7 +7,6 @@ const {
   sendErrorEmail,
   sendNotificationEmail,
 } = require("../services/mailService");
-const { logger } = require("../services/logging");
 const { getGeoData } = require("../services/geoCoder");
 const { generateContractPdf } = require("../services/export/contractExport");
 const { orderAdminNotification } = require("../services/notification/order");
