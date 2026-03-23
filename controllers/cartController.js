@@ -1,4 +1,5 @@
 const db = require("../models");
+const { logger } = require("../services/logging");
 
 exports.syncCart = async (req, res) => {
   const { cartContent, userId } = req.body;
@@ -91,6 +92,7 @@ exports.syncCart = async (req, res) => {
     return res.json(cart);
   } catch (error) {
     console.error("Error syncing cart:", error);
+    logger("error", `[syncCart] ${error.message}`);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 };
@@ -166,6 +168,7 @@ exports.getCart = async (req, res) => {
     return res.json(response);
   } catch (error) {
     console.error("Error fetching vehicle for cart:", error);
+    logger("error", `[getCart] ${error.message}`);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 };

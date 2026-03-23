@@ -1,6 +1,7 @@
 const db = require("../models");
 const path = require("path");
 const fs = require("fs");
+const { logger } = require("../services/logging");
 const {
   generateEmailHtml,
   sendErrorEmail,

@@ -1,4 +1,5 @@
 const db = require("../models");
+const { logger } = require("../services/logging");
 
 const carAboIncludes = [
   { model: db.CarAboPrice, as: "prices" },
@@ -127,6 +128,7 @@ exports.createCarAbo = async (req, res) => {
 
     return res.status(201).json(createdCarAbo);
   } catch (error) {
+    logger("error", `[createCarAbo] ${error.message}`);
     return res.status(500).json({ error: error.message });
   }
 };
@@ -143,6 +145,7 @@ exports.findAllCarAbos = async (req, res) => {
     });
     return res.status(200).json(carAbos);
   } catch (error) {
+    logger("error", `[findAllCarAbos] ${error.message}`);
     return res.status(500).send({ error: error.message });
   }
 };
@@ -159,6 +162,7 @@ exports.findAllCarAboAdmin = async (req, res) => {
     });
     return res.status(200).json(carAbos);
   } catch (error) {
+    logger("error", `[findAllCarAboAdmin] ${error.message}`);
     return res.status(500).send({ error: error.message });
   }
 };
@@ -193,6 +197,7 @@ exports.findAvailableCarAbos = async (req, res) => {
 
     return res.status(200).json(carAbos);
   } catch (error) {
+    logger("error", `[findAvailableCarAbos] ${error.message}`);
     return res.status(500).send({ error: error.message });
   }
 };
@@ -212,6 +217,7 @@ exports.findOneCarAbo = async (req, res) => {
     }
     return res.status(200).json(carAbo);
   } catch (error) {
+    logger("error", `[findOneCarAbo] ${error.message}`);
     return res.status(500).send({ error: error.message });
   }
 };
@@ -268,6 +274,7 @@ exports.updateCarAbo = async (req, res) => {
 
     return res.status(200).json(updatedCarAbo);
   } catch (error) {
+    logger("error", `[updateCarAbo] ${error.message}`);
     return res.status(500).send({ error: error.message });
   }
 };
@@ -283,6 +290,7 @@ exports.deleteCarAbo = async (req, res) => {
     }
     return res.status(204).send();
   } catch (error) {
+    logger("error", `[deleteCarAbo] ${error.message}`);
     return res.status(500).send({ error: error.message });
   }
 };
@@ -340,6 +348,7 @@ exports.calculatePrice = async (req, res) => {
       durationType: validDurationType
     });
   } catch (error) {
+    logger("error", `[calculatePrice] ${error.message}`);
     return res.status(500).json({ error: error.message });
   }
 };
