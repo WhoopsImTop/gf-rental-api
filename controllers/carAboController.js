@@ -286,3 +286,60 @@ exports.deleteCarAbo = async (req, res) => {
     return res.status(500).send({ error: error.message });
   }
 };
+
+exports.calculatePrice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { depositValue, durationMonths, mileageKm, durationType } = req.body;
+
+    // Validate durationType, default to 'fixed'
+    const validDurationType = durationType === 'minimum' ? 'minimum' : 'fixed';
+
+    const carAbo = await db.CarAbo.findByPk(id, {
+      include: [{ model: db.CarAboPrice, as: "prices" }]
+    });
+
+    if (!carAbo) {
+      return res.status(404).json({ error: "CarAbo not found" });
+    }
+
+    const selectedPrice = carAbo.prices.find(
+      (p) => p.durationMonths === parseInt(durationMonths) && p.mileageKm === parseInt(mileageKm)
+    );
+
+    if (!selectedPrice) {
+      return res.status(404).json({ error: "Price configuration not found" });
+    }
+
+    // Determine base price based on durationType
+    const basePrice = validDurationType === 'minimum'
+      ? parseFloat(selectedPrice.priceMinimumDuration)
+      : parseFloat(selectedPrice.priceFixedDuration);
+
+    const depositAmount = parseFloat(depositValue) || 0;
+
+    // Linear formula: reduce monthly price by deposit spread over duration
+    let calculatedPrice = basePrice;
+    if (depositAmount > 0) {
+      calculatedPrice = basePrice - (depositAmount / parseInt(durationMonths));
+    }
+    // Ensure monthly price stays positive
+    if (calculatedPrice <= 0) {
+      return res.status(400).json({ error: "Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein." });
+    }
+
+    const totalCost = calculatedPrice * parseInt(durationMonths);
+    const baseTotalCost = basePrice * parseInt(durationMonths);
+    const savings = baseTotalCost - (totalCost + depositAmount);
+
+    return res.status(200).json({
+      monthlyPrice: parseFloat(calculatedPrice.toFixed(2)),
+      totalCost: parseFloat(totalCost.toFixed(2)),
+      savings: parseFloat(savings.toFixed(2)),
+      depositValue: depositAmount,
+      durationType: validDurationType
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};

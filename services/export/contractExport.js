@@ -111,7 +111,7 @@ async function generateContractPdf(contractInstance) {
       InvoiceSavetyPackageBrutto: bruttoHaftung.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
 
       InvoiceDeliveryCosts: bruttoLieferung.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      InvoiceDepositPayment: (contractInstance.withDeposit ? 1500 : 0).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      InvoiceDepositPayment: (contractInstance.depositValue * 1.025 || 0).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
 
       MonthlyTotalBrutto: monatsgebuehrBruttoGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
     };

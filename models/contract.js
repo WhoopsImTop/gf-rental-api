@@ -205,8 +205,18 @@ module.exports = (sequelize, DataTypes) => {
       priceId: {
         type: DataTypes.INTEGER,
       },
-      withDeposit: {
-        type: DataTypes.BOOLEAN,
+      durationType: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        defaultValue: 'fixed',
+      },
+      depositValue: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
+      calculatedMonthlyPrice: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
       },
       lat: {
         type: DataTypes.TEXT,

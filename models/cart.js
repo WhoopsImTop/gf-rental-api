@@ -28,9 +28,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
-      withDeposit: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true,
+      durationType: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        defaultValue: 'fixed',
       },
       completed: {
         type: DataTypes.BOOLEAN,
@@ -39,6 +40,14 @@ module.exports = (sequelize, DataTypes) => {
       syncedByCantamen: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
+      },
+      depositValue: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
+      calculatedMonthlyPrice: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
       },
       //virtual field if user was synced from cantamen
     },

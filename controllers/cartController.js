@@ -2,9 +2,6 @@ const db = require("../models");
 
 exports.syncCart = async (req, res) => {
   const { cartContent, userId } = req.body;
-  // If cartId is provided, update, else create?
-  // Or purely based on userId if logged in?
-  // Or return a cartId to the frontend to store in cookie/localstorage.
 
   let cartId = req.body.cartId;
 
@@ -15,7 +12,46 @@ exports.syncCart = async (req, res) => {
     }
 
     // Logic to merge or create
-    const { carAboId, colorId, priceId, withDeposit } = cartContent;
+    let { carAboId, colorId, priceId, durationType, depositValue, calculatedMonthlyPrice } = cartContent;
+
+    // Validate durationType
+    const validDurationType = durationType === 'minimum' ? 'minimum' : 'fixed';
+
+    //check if the calculatedMonthlyPrice from the client is correct
+    const carAbo = await db.CarAbo.findByPk(carAboId, {
+      include: [{
+        model: db.CarAboPrice, as: "prices",
+        where: {
+          id: priceId,
+        }
+      }]
+    });
+
+    const selectedPrice = carAbo.prices[0];
+
+    // Determine base price based on durationType
+    const basePrice = validDurationType === 'minimum'
+      ? parseFloat(selectedPrice.priceMinimumDuration)
+      : parseFloat(selectedPrice.priceFixedDuration);
+
+    const depositAmount = parseFloat(depositValue) || 0;
+
+    // Linear formula: reduce monthly price by deposit spread over duration
+    let calculatedPrice = basePrice;
+    if (depositAmount > 0) {
+      calculatedPrice = basePrice - (depositAmount / parseInt(selectedPrice.durationMonths));
+    }
+
+    // Ensure monthly price stays positive
+    if (calculatedPrice <= 0) {
+      return res.status(400).json({ error: "Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein." });
+    }
+
+    calculatedPrice = parseFloat(calculatedPrice.toFixed(2));
+
+    if (calculatedMonthlyPrice !== calculatedPrice) {
+      calculatedMonthlyPrice = calculatedPrice;
+    }
 
     if (cart) {
       if (cart.completed) {
@@ -25,7 +61,9 @@ exports.syncCart = async (req, res) => {
           carAboId,
           colorId,
           priceId,
-          withDeposit,
+          durationType: validDurationType,
+          depositValue,
+          calculatedMonthlyPrice,
         });
       } else {
         // Update existing
@@ -33,7 +71,9 @@ exports.syncCart = async (req, res) => {
         cart.carAboId = carAboId;
         cart.colorId = colorId;
         cart.priceId = priceId;
-        cart.withDeposit = withDeposit;
+        cart.durationType = validDurationType;
+        cart.depositValue = depositValue;
+        cart.calculatedMonthlyPrice = calculatedMonthlyPrice;
         await cart.save();
       }
     } else {
@@ -42,7 +82,9 @@ exports.syncCart = async (req, res) => {
         carAboId,
         colorId,
         priceId,
-        withDeposit,
+        durationType: validDurationType,
+        depositValue,
+        calculatedMonthlyPrice,
       });
     }
 
@@ -99,11 +141,26 @@ exports.getCart = async (req, res) => {
       selectedPrice = cart.car.prices.find(price => price.id === cart.priceId);
     }
 
+    // Look up associated contract (for completed carts / confirmation page)
+    let contract = null;
+    if (cart.completed) {
+      contract = await db.Contract.findOne({
+        where: {
+          carAboId: cart.carAboId,
+          colorId: cart.colorId,
+          priceId: cart.priceId,
+          userId: cart.userId,
+        },
+        order: [['createdAt', 'DESC']],
+      });
+    }
+
     // Build response with selected items
     const response = {
       ...cart.toJSON(),
       selectedColor,
       selectedPrice,
+      contract: contract ? contract.toJSON() : null,
     };
 
     return res.json(response);

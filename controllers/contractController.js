@@ -175,9 +175,16 @@ exports.createContract = async (req, res) => {
       }
 
       const duration = selectedPrice.durationMonths;
-      const monthlyPrice = Cart.withDeposit
-        ? selectedPrice.priceWithDeposit
-        : selectedPrice.priceNoDeposit;
+      const validDurationType = Cart.durationType === 'minimum' ? 'minimum' : 'fixed';
+      const basePrice = validDurationType === 'minimum'
+        ? parseFloat(selectedPrice.priceMinimumDuration)
+        : parseFloat(selectedPrice.priceFixedDuration);
+      const depVal = parseFloat(Cart.depositValue) || 0;
+      let monthlyPrice = basePrice;
+      if (depVal > 0) {
+        monthlyPrice = basePrice - Math.floor((depVal * 1.025 / parseInt(duration)));
+      }
+      monthlyPrice = parseFloat(monthlyPrice.toFixed(2));
       const totalCost = duration * monthlyPrice;
 
       const contract = await db.Contract.create(
@@ -220,7 +227,9 @@ exports.createContract = async (req, res) => {
           carAboId: Cart.carAboId,
           colorId: Cart.colorId,
           priceId: Cart.priceId,
-          withDeposit: Cart.withDeposit,
+          durationType: Cart.durationType || 'fixed',
+          depositValue: Cart.depositValue,
+          calculatedMonthlyPrice: Cart.calculatedMonthlyPrice,
           syncedByCantamen: syncedByCantamen,
           lat: lat,
           lng: lon,
@@ -282,6 +291,7 @@ exports.createContract = async (req, res) => {
       }
 
       const emailContent = `
+<img src="${autoAbo.colors[0].media.url}" width="100%" height="auto"/>
 <p>Hallo ${user.firstName + "," ?? ""}</p>
       <p>Hiermit bestätigen wir Ihr Abo Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
       <p><strong>Um die Übergabe zu erleichtern, schicken Sie uns Bitte eine Kopie der Vorder- und Rückseite ihres Personalausweises und Führerscheins zu.</strong></p>
@@ -310,12 +320,14 @@ exports.createContract = async (req, res) => {
         }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.duration} ${contract.duration > 1 ? "Monate" : "Monat"
         }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Kilometerleistung</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.price.mileageKm
+        }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Führerscheinnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.driversLicenseNumber
         }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.IdCardNumber
         }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Monatliche Rate</td><td style="padding: 8px 16px; margin: 0;border-bottom: 1px solid #efefef">${contract.monthlyPrice} €</td></tr>
-        ${contract.withDeposit ? `<tr><td style="padding: 8px 16px; margin: 0;">Anzahlung (Einmalig)</td><td style="padding: 8px 16px; margin: 0;">1500 €</td></tr>` : ''
+        ${contract.depositValue > 0 ? `<tr><td style="padding: 8px 16px; margin: 0;">Anzahlung (Einmalig)</td><td style="padding: 8px 16px; margin: 0;">${contract.depositValue} €</td></tr>` : ''
         }
         </tbody>
       </table>
@@ -326,7 +338,7 @@ exports.createContract = async (req, res) => {
           <li><strong>Vertrag und Übergabe</strong><br>
           Wir überprüfen Ihre Angaben und senden Ihnen Ihren Vertrag und das Bestätigte Übergabedatum zu.</li>
           <li><strong>Vertragsunterschrift</strong><br>Bitte senden Sie uns den Vertrag unterschrieben zurück.</li>
-          ${contract.withDeposit ? '<li><strong>Abbuchung der Anzahlung</strong><br>Wir werden Ihre Anzahlung ein paar Tage vor Übergabe des Fahrzeuges abbuchen.</li>' : ''}
+          ${contract.depositValue > 0 ? '<li><strong>Abbuchung der Anzahlung</strong><br>Wir werden Ihre Anzahlung ein paar Tage vor Übergabe des Fahrzeuges abbuchen.</li>' : ''}
           <li><strong>Übergabe Ihres Fahrzeuges</strong><br>
           Bei der Übergabe muss Führerschein und Personalausweis in Original vorgelegt werden.</li>
         </ol>

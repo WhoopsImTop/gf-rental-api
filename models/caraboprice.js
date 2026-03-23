@@ -23,11 +23,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
-      priceWithDeposit: {
+      priceMinimumDuration: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
       },
-      priceNoDeposit: {
+      priceFixedDuration: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
       },
