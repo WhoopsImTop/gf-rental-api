@@ -1,5 +1,6 @@
-const { verifyToken } = require("../services/auth/tokenService");
+const { verifyToken, createToken } = require("../services/auth/tokenService");
 const db = require("../models");
+const { logger } = require("../services/logging");
 
 async function authenticateToken(req, res, next) {
   try {
@@ -10,26 +11,46 @@ async function authenticateToken(req, res, next) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    // 1️⃣ JWT prüfen
     const decoded = verifyToken(token);
     if (!decoded) {
+      logger("error", "Invalid or expired token " + token);
       return res.status(403).json({ message: "Invalid or expired token" });
     }
 
-    // Session prüfen
-    const session = await db.Session.findOne({ where: { token } });
-    if (!session || new Date(session.expiresAt) < new Date()) {
-      return res.status(403).json({ message: "Session invalid or expired" });
+    // 2️⃣ DB-Session prüfen
+    let session = await db.Session.findOne({ where: { token } });
+
+    // Falls Session nicht existiert → neue Session erstellen (optional)
+    if (!session) {
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 Tag
+      session = await db.Session.create({
+        token,
+        userId: decoded.userId,
+        expiresAt,
+      });
+    } else {
+      // Session vorhanden → prüfen, ob abgelaufen
+      if (new Date(session.expiresAt) < new Date()) {
+        return res.status(403).json({ message: "Session expired" });
+      }
+
+      // Session verlängern optional (z. B. Sliding Session)
+      const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      session.expiresAt = newExpiry;
+      await session.save();
     }
 
-    // User laden
+    // 3️⃣ User laden
     const user = await db.User.findByPk(decoded.userId, {
-      attributes: ["id", "firstName", "lastName", "role"]
+      attributes: ["id", "firstName", "lastName", "role"],
     });
 
     if (!user) {
       return res.status(403).json({ message: "User not found" });
     }
 
+    // 4️⃣ User an Request anhängen
     req.user = user;
     next();
   } catch (err) {
