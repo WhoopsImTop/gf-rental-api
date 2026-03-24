@@ -6,7 +6,16 @@ const carAboIncludes = [
   {
     model: db.CarAboColor,
     as: "colors",
-    include: [{ model: db.Media, as: "media" }],
+    include: [
+      { model: db.Media, as: "media" },
+      {
+        model: db.CarAboColorMedia,
+        as: "exteriorImages",
+        include: [{ model: db.Media, as: "media" }],
+        separate: true,
+        order: [["sortOrder", "ASC"]],
+      },
+    ],
     where: { isOrdered: false },
   },
   {
@@ -25,7 +34,16 @@ const carAboAdminIncludes = [
   {
     model: db.CarAboColor,
     as: "colors",
-    include: [{ model: db.Media, as: "media" }],
+    include: [
+      { model: db.Media, as: "media" },
+      {
+        model: db.CarAboColorMedia,
+        as: "exteriorImages",
+        include: [{ model: db.Media, as: "media" }],
+        separate: true,
+        order: [["sortOrder", "ASC"]],
+      },
+    ],
   },
   {
     model: db.CarAboMedia,
@@ -78,6 +96,57 @@ const updateChildren = async (Model, items, carAboId, transaction) => {
   }
 };
 
+const updateColorsWithExteriorImages = async (items, carAboId, transaction) => {
+  if (!Array.isArray(items)) {
+    return;
+  }
+
+  const existing = await db.CarAboColor.findAll({
+    where: { carAboId },
+    transaction,
+  });
+
+  const existingMap = new Map(existing.map((item) => [item.id, item]));
+
+  for (const item of items) {
+    const { exteriorImages, ...colorData } = item;
+    let colorRecord;
+
+    if (colorData.id && existingMap.has(colorData.id)) {
+      const { id, carAboId: _, ...data } = colorData;
+      await existingMap.get(id).update(data, { transaction });
+      colorRecord = existingMap.get(id);
+      existingMap.delete(id);
+    } else {
+      const { id: _, ...data } = colorData;
+      colorRecord = await db.CarAboColor.create(
+        { ...data, carAboId },
+        { transaction },
+      );
+    }
+
+    // Replace exterior images for this color
+    await db.CarAboColorMedia.destroy({
+      where: { carAboColorId: colorRecord.id },
+      transaction,
+    });
+    if (Array.isArray(exteriorImages) && exteriorImages.length) {
+      await db.CarAboColorMedia.bulkCreate(
+        exteriorImages.map((img, i) => ({
+          carAboColorId: colorRecord.id,
+          mediaId: img.mediaId,
+          sortOrder: img.sortOrder ?? i,
+        })),
+        { transaction },
+      );
+    }
+  }
+
+  for (const leftover of existingMap.values()) {
+    await leftover.destroy({ transaction });
+  }
+};
+
 exports.createCarAbo = async (req, res) => {
   const { prices, colors, media, ...carAboPayload } = req.body;
 
@@ -108,10 +177,28 @@ exports.createCarAbo = async (req, res) => {
         }
 
         if (Array.isArray(colors) && colors.length) {
-          await db.CarAboColor.bulkCreate(
-            colors.map((color) => ({ ...color, carAboId: carAbo.id })),
-            { transaction },
-          );
+          const colorRecords = [];
+          for (const color of colors) {
+            const { exteriorImages, ...colorData } = color;
+            const created = await db.CarAboColor.create(
+              { ...colorData, carAboId: carAbo.id },
+              { transaction },
+            );
+            colorRecords.push({ created, exteriorImages });
+          }
+          // Create exterior images for each color
+          for (const { created, exteriorImages } of colorRecords) {
+            if (Array.isArray(exteriorImages) && exteriorImages.length) {
+              await db.CarAboColorMedia.bulkCreate(
+                exteriorImages.map((img, i) => ({
+                  carAboColorId: created.id,
+                  mediaId: img.mediaId,
+                  sortOrder: img.sortOrder ?? i,
+                })),
+                { transaction },
+              );
+            }
+          }
         }
 
         if (Array.isArray(media) && media.length) {
@@ -175,7 +262,16 @@ exports.findAvailableCarAbos = async (req, res) => {
         {
           model: db.CarAboColor,
           as: "colors",
-          include: [{ model: db.Media, as: "media" }],
+          include: [
+            { model: db.Media, as: "media" },
+            {
+              model: db.CarAboColorMedia,
+              as: "exteriorImages",
+              include: [{ model: db.Media, as: "media" }],
+              separate: true,
+              order: [["sortOrder", "ASC"]],
+            },
+          ],
           where: [{ isOrdered: false }],
         },
         {
@@ -256,7 +352,7 @@ exports.updateCarAbo = async (req, res) => {
         }
 
         if ("colors" in req.body) {
-          await updateChildren(db.CarAboColor, colors ?? [], id, transaction);
+          await updateColorsWithExteriorImages(colors ?? [], id, transaction);
         }
 
         if ("media" in req.body) {

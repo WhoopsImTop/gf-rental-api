@@ -11,6 +11,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "mediaId",
         as: "media",
       });
+      CarAboColor.hasMany(models.CarAboColorMedia, {
+        foreignKey: "carAboColorId",
+        as: "exteriorImages",
+      });
     }
   }
   CarAboColor.init(
