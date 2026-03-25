@@ -34,13 +34,13 @@ module.exports = {
         type: Sequelize.STRING,
       },
       consumption: {
-        type: Sequelize.INTEGER,
+        type: Sequelize.DECIMAL(4, 1),
       },
       consumptionCity: {
-        type: Sequelize.INTEGER,
+        type: Sequelize.DECIMAL(4, 1),
       },
       consumptionHighway: {
-        type: Sequelize.INTEGER,
+        type: Sequelize.DECIMAL(4, 1),
       },
       description: {
         type: Sequelize.TEXT,
