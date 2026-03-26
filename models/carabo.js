@@ -85,6 +85,7 @@ module.exports = (sequelize, DataTypes) => {
       vehicleStatus: DataTypes.ENUM("used", "new"),
       marketingImageDesktop: DataTypes.STRING,
       marketingImageMobile: DataTypes.STRING,
+      strikePrice: DataTypes.DECIMAL(10, 2),
     },
     {
       sequelize,

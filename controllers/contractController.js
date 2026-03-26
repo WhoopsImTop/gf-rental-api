@@ -153,13 +153,21 @@ exports.createContract = async (req, res) => {
         ],
       });
 
-      let userScore = { score: "Kein Score vorhanden" }
+      let userScore = { score: "Kein Score vorhanden" };
       if (!Cart.syncedByCantamen) {
         // check if personal score of user is matching the score in the settings
         const settings = await db.Setting.findOne();
-        userScore = await getUserScore(customerDetails.firstName, customerDetails.lastName, customerDetails.birthday, customerDetails.street + " " + customerDetails.housenumber, customerDetails.postalCode, customerDetails.city, cartId);
+        userScore = await getUserScore(
+          customerDetails.firstName,
+          customerDetails.lastName,
+          customerDetails.birthday,
+          customerDetails.street + " " + customerDetails.housenumber,
+          customerDetails.postalCode,
+          customerDetails.city,
+          cartId,
+        );
         //the score is between P and A and our settingkey is allowedScore
-        console.log(userScore.score, settings.allowedScore)
+        console.log(userScore.score, settings.allowedScore);
         if (userScore.score > settings.allowedScore) {
           throw new Error("SCORE_REJECTED");
         }
@@ -201,14 +209,16 @@ exports.createContract = async (req, res) => {
       }
 
       const duration = selectedPrice.durationMonths;
-      const validDurationType = Cart.durationType === 'minimum' ? 'minimum' : 'fixed';
-      const basePrice = validDurationType === 'minimum'
-        ? parseFloat(selectedPrice.priceMinimumDuration)
-        : parseFloat(selectedPrice.priceFixedDuration);
+      const validDurationType =
+        Cart.durationType === "minimum" ? "minimum" : "fixed";
+      const basePrice =
+        validDurationType === "minimum"
+          ? parseFloat(selectedPrice.priceMinimumDuration)
+          : parseFloat(selectedPrice.priceFixedDuration);
       const depVal = parseFloat(Cart.depositValue) || 0;
       let monthlyPrice = basePrice;
       if (depVal > 0) {
-        monthlyPrice = basePrice - (depVal * 1.025 / parseInt(duration));
+        monthlyPrice = basePrice - (depVal * 1.025) / parseInt(duration);
       }
       //check if insurance is included and add it to the monthly price
       if (contractData.insurancePackage) {
@@ -226,8 +236,10 @@ exports.createContract = async (req, res) => {
           insurancePackage: contractData.insurancePackage || false,
           insuranceType: contractData.insuranceType || "none",
           insuranceCosts: contractData.insuranceCosts || 0,
-          insuranceDeductibleHaftpflicht: contractData.insuranceDeductibleHaftpflicht || null,
-          insuranceDeductibleTeilkasko: contractData.insuranceDeductibleTeilkasko || null,
+          insuranceDeductibleHaftpflicht:
+            contractData.insuranceDeductibleHaftpflicht || null,
+          insuranceDeductibleTeilkasko:
+            contractData.insuranceDeductibleTeilkasko || null,
           familyAndFriends: contractData.familyAndFriends || false,
           familyAndFriendsCosts: contractData.familyAndFriendsCosts || 0,
           familyAndFriendsMembers: contractData.familyAndFriendsMembers || [],
@@ -256,11 +268,11 @@ exports.createContract = async (req, res) => {
           carAboId: Cart.carAboId,
           colorId: Cart.colorId,
           priceId: Cart.priceId,
-          durationType: Cart.durationType || 'fixed',
+          durationType: Cart.durationType || "fixed",
           depositValue: Cart.depositValue,
           calculatedMonthlyPrice: Cart.calculatedMonthlyPrice,
           syncedByCantamen: syncedByCantamen,
-          score: userScore.score || 'Kein Score vorhanden',
+          score: userScore.score || "Kein Score vorhanden",
           lat: lat,
           lng: lon,
         },
@@ -332,43 +344,63 @@ exports.createContract = async (req, res) => {
         <tbody>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.firstName}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.lastName}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.street} ${user.customerDetails.housenumber
-        }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.street} ${
+            user.customerDetails.housenumber
+          }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">PLZ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.postalCode}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.city}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Telefon</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.phone}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Email</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.email}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.startingDate
-          ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
-            day: "numeric",
-            month: "long",
-            year: "2-digit",
-          })
-          : "-"
-        }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Sicherheitspaket</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.insuranceType === "premium" ? "Premium" : (contract.insuranceType === "basic" ? "Basic" : (contract.insurancePackage ? "Ja" : "Nein"))
-        }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.duration} ${contract.duration > 1 ? "Monate" : "Monat"
-        }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Kilometerleistung</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${selectedPrice.mileageKm
-        }km</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Führerscheinnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.driversLicenseNumber
-        }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.IdCardNumber
-        }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
+            contract.startingDate
+              ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
+                  day: "numeric",
+                  month: "long",
+                  year: "2-digit",
+                })
+              : "-"
+          }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Sicherheitspaket</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
+            contract.insuranceType === "premium"
+              ? "Premium"
+              : contract.insuranceType === "basic"
+                ? "Basic"
+                : contract.insurancePackage
+                  ? "Ja"
+                  : "Nein"
+          }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.duration} ${
+            contract.duration > 1 ? "Monate" : "Monat"
+          }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Kilometerleistung</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
+            selectedPrice.mileageKm
+          }km</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Führerscheinnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
+            user.customerDetails.driversLicenseNumber
+          }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
+            user.customerDetails.IdCardNumber
+          }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Monatliche Gesamtrate:</td><td style="padding: 8px 16px; margin: 0;border-bottom: 1px solid #efefef">${parseFloat(contract.monthlyPrice).toFixed(2)} €</td></tr>
-        ${contract.depositValue > 0 ? `<tr><td style="padding: 8px 16px; margin: 0;">Anzahlung (Einmalig)</td><td style="padding: 8px 16px; margin: 0;">${parseFloat(contract.depositValue).toFixed(2)} €</td></tr>` : ''
+        ${
+          contract.depositValue > 0
+            ? `<tr><td style="padding: 8px 16px; margin: 0;">Anzahlung (Einmalig)</td><td style="padding: 8px 16px; margin: 0;">${parseFloat(contract.depositValue).toFixed(2)} €</td></tr>`
+            : ""
         }
         </tbody>
       </table>
+
+      ${contract.durationType === "minimum" ? `<p>Ohne fristgerechte Kündigung (1 Monat vor Vertragsende) verlängert sich die Nutzung.</p>` : ""}
+      ${contract.durationType === "minimum" && contract.depositValue > 0 ? `<p>Der Monatsbeitrag des Fahrzeuges steigt dann auf <strong>${parseFloat(selectedPrice.priceMinimumDuration).toFixed(2)} €</strong> (ohne Anzahlungsvorteil).</p>` : ""}
+
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Nächste Schritte</h2>
         <ol style="padding-left: 15px">
-          ${contract.syncedByCantamen ? '' : '<li><strong>Bitte senden Sie uns eine Kopie Ihres Personalausweises und Führerscheins</strong><br>Bitte senden Sie die Dateien an folgende E-Mail-Adresse: <a style="color: #82ba26" href="mailto:autoabo@gruene-flotte.com">autoabo@gruene-flotte.com</a></li>'}
+          ${contract.syncedByCantamen ? "" : '<li><strong>Bitte senden Sie uns eine Kopie Ihres Personalausweises und Führerscheins</strong><br>Bitte senden Sie die Dateien an folgende E-Mail-Adresse: <a style="color: #82ba26" href="mailto:autoabo@gruene-flotte.com">autoabo@gruene-flotte.com</a></li>'}
           <li><strong>Vertrag und Übergabe</strong><br>
           Wir überprüfen Ihre Angaben und senden Ihnen Ihren Vertrag und das Bestätigte Übergabedatum zu.</li>
           <li><strong>Vertragsunterschrift</strong><br>Bitte senden Sie uns den Vertrag unterschrieben zurück.</li>
-          ${contract.depositValue > 0 ? '<li><strong>Abbuchung der Anzahlung</strong><br>Wir werden Ihre Anzahlung ein paar Tage vor Übergabe des Fahrzeuges abbuchen.</li>' : ''}
+          ${contract.depositValue > 0 ? "<li><strong>Abbuchung der Anzahlung</strong><br>Wir werden Ihre Anzahlung ein paar Tage vor Übergabe des Fahrzeuges abbuchen.</li>" : ""}
           <li><strong>Übergabe Ihres Fahrzeuges</strong><br>
           Bei der Übergabe muss Führerschein und Personalausweis in Original vorgelegt werden.</li>
         </ol>
@@ -413,13 +445,25 @@ exports.createContract = async (req, res) => {
 
     // Eigene Fehler abfangen und richtig beantworten
     if (error.message === "MISSING_USER_ID") {
-      return res.status(400).json({ message: "No UserId Provided. Please try again" });
+      return res
+        .status(400)
+        .json({ message: "No UserId Provided. Please try again" });
     }
     if (error.message === "SCORE_REJECTED") {
-      return res.status(200).json({ message: "User score is not matching the score in the settings", redirectUrl: "/nicht-abonnierbar" });
+      return res
+        .status(200)
+        .json({
+          message: "User score is not matching the score in the settings",
+          redirectUrl: "/nicht-abonnierbar",
+        });
     }
     if (error.message === "COLOR_ALREADY_ORDERED") {
-      return res.status(200).json({ message: "Color is already ordered", redirectUrl: "/leider-abonniert" });
+      return res
+        .status(200)
+        .json({
+          message: "Color is already ordered",
+          redirectUrl: "/leider-abonniert",
+        });
     }
 
     // Genereller Server-Fehler
@@ -436,9 +480,15 @@ exports.archiveContract = async (req, res) => {
   try {
     let contract = await db.Contract.findOne({ where: { id } });
     if (!contract) {
-      return res.status(404).json({ success: false, message: "Contract not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Contract not found" });
     }
-    if (contract.userId !== req.user.id && req.user.role !== "ADMIN" && req.user.role !== "SELLER") {
+    if (
+      contract.userId !== req.user.id &&
+      req.user.role !== "ADMIN" &&
+      req.user.role !== "SELLER"
+    ) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
@@ -504,12 +554,10 @@ exports.generateContract = async (req, res) => {
     res.json({ success: true, file: pdfFileName });
   } catch (err) {
     console.log(err);
-    res
-      .status(500)
-      .json({
-        error: "PDF konnte nicht erstellt werden",
-        errorMessage: err,
-      });
+    res.status(500).json({
+      error: "PDF konnte nicht erstellt werden",
+      errorMessage: err,
+    });
   }
 };
 
@@ -587,7 +635,11 @@ exports.deleteContract = async (req, res) => {
     if (!contract) {
       return res.status(404).json({ message: "Contract not found" });
     }
-    if (contract.userId !== req.user.id && req.user.role !== "ADMIN" && req.user.role !== "SELLER") {
+    if (
+      contract.userId !== req.user.id &&
+      req.user.role !== "ADMIN" &&
+      req.user.role !== "SELLER"
+    ) {
       return res.status(403).json({ message: "Access denied" });
     }
 

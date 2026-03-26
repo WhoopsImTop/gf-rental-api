@@ -370,7 +370,7 @@ exports.updateCarAbo = async (req, res) => {
 
     return res.status(200).json(updatedCarAbo);
   } catch (error) {
-    logger("error", `[updateCarAbo] ${error.message}`);
+    logger("error", `[updateCarAbo] ${error.message} ${req.body}`);
     return res.status(500).send({ error: error.message });
   }
 };
