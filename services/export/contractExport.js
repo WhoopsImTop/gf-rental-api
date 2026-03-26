@@ -31,7 +31,7 @@ async function generateContractPdf(contractInstance) {
     const getMwStAnteil = (brutto) =>
       brutto ? parseFloat(brutto) - parseFloat(brutto) / 1.19 : 0;
 
-    const bruttoMiete = parseFloat(contractInstance.monthlyPrice || 0);
+    const bruttoMiete = parseFloat(contractInstance.calculatedMonthlyPrice || 0);
     const bruttoHaftung = contractInstance.insurancePackage
       ? parseFloat(contractInstance.insuranceCosts || 0)
       : 0;
@@ -87,33 +87,27 @@ async function generateContractPdf(contractInstance) {
         { minimumFractionDigits: 2 },
       ),
 
+      //loop over all family and friends entries and make a list firstname lastname birthday
       familyAndFriends: contractInstance.familyAndFriendsMembers && contractInstance.familyAndFriendsMembers.length > 0
-        ? `${contractInstance.familyAndFriendsMembers[0].firstName} ${contractInstance.familyAndFriendsMembers[0].lastName}, ${new Date(contractInstance.familyAndFriendsMembers[0].birthday).toLocaleDateString("de-DE")}`
+        ? contractInstance.familyAndFriendsMembers.map((member) => `${member.firstName} ${member.lastName}, ${new Date(member.birthday).toLocaleDateString("de-DE")}`).join(",  \n")
         : "Keine",
-      'familyAndFriends 2': contractInstance.familyAndFriendsMembers && contractInstance.familyAndFriendsMembers.length > 1
-        ? `${contractInstance.familyAndFriendsMembers[1].firstName} ${contractInstance.familyAndFriendsMembers[1].lastName}, ${new Date(contractInstance.familyAndFriendsMembers[1].birthday).toLocaleDateString("de-DE")}`
-        : "",
-      'familyAndFriends 3': contractInstance.familyAndFriendsMembers && contractInstance.familyAndFriendsMembers.length > 2
-        ? `${contractInstance.familyAndFriendsMembers[2].firstName} ${contractInstance.familyAndFriendsMembers[2].lastName}, ${new Date(contractInstance.familyAndFriendsMembers[2].birthday).toLocaleDateString("de-DE")}`
-        : "",
-
       // Kostenaufstellung [cite: 39-45]
       invoiceCarName: contractInstance.carAbo?.displayName || "",
       InvoiceSavetyPackageName: contractInstance.insuranceType === "premium" ? "Premium" : (contractInstance.insuranceType === "basic" ? "Basic" : "Standard"),
 
-      invoiceCarMonthlyNetto: getNetto(bruttoMiete).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      InvoiceSavetyPackageNetto: getNetto(bruttoHaftung).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      invoiceCarMonthlyNetto: getNetto(bruttoMiete).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      InvoiceSavetyPackageNetto: getNetto(bruttoHaftung).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
 
-      invoiceCarVat: getMwStAnteil(bruttoMiete).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      InvoiceSavetyPackageVat: getMwStAnteil(bruttoHaftung).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      invoiceCarVat: getMwStAnteil(bruttoMiete).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      InvoiceSavetyPackageVat: getMwStAnteil(bruttoHaftung).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
 
-      InvoiceCarMonthlyBrutto: bruttoMiete.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      InvoiceSavetyPackageBrutto: bruttoHaftung.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      InvoiceCarMonthlyBrutto: bruttoMiete.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      InvoiceSavetyPackageBrutto: bruttoHaftung.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
 
-      InvoiceDeliveryCosts: bruttoLieferung.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
-      InvoiceDepositPayment: (contractInstance.depositValue * 1.025 || 0).toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      InvoiceDeliveryCosts: bruttoLieferung.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      InvoiceDepositPayment: (contractInstance.depositValue || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
 
-      MonthlyTotalBrutto: monatsgebuehrBruttoGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2 }),
+      MonthlyTotalBrutto: monatsgebuehrBruttoGesamt.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     };
 
     // Textfelder befüllen

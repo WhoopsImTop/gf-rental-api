@@ -40,7 +40,7 @@ exports.syncCart = async (req, res) => {
     // Linear formula: reduce monthly price by deposit spread over duration
     let calculatedPrice = basePrice;
     if (depositAmount > 0) {
-      calculatedPrice = basePrice - (depositAmount / parseInt(selectedPrice.durationMonths));
+      calculatedPrice = basePrice - ((depositAmount * 1.025) / parseInt(selectedPrice.durationMonths));
     }
 
     // Ensure monthly price stays positive
@@ -48,7 +48,7 @@ exports.syncCart = async (req, res) => {
       return res.status(400).json({ error: "Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein." });
     }
 
-    calculatedPrice = parseFloat(calculatedPrice.toFixed(2));
+    calculatedPrice = Math.round(parseFloat(calculatedPrice.toFixed(2)));
 
     if (calculatedMonthlyPrice !== calculatedPrice) {
       calculatedMonthlyPrice = calculatedPrice;
@@ -153,10 +153,10 @@ exports.getCart = async (req, res) => {
           priceId: cart.priceId,
           userId: cart.userId,
         },
+        attributes: ["monthlyPrice", "insuranceType", "insuranceCosts", "insurancePackage", "deliveryCosts", "depositValue"],
         order: [['createdAt', 'DESC']],
       });
     }
-
     // Build response with selected items
     const response = {
       ...cart.toJSON(),

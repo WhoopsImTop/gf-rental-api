@@ -425,7 +425,7 @@ exports.calculatePrice = async (req, res) => {
     // Linear formula: reduce monthly price by deposit spread over duration
     let calculatedPrice = basePrice;
     if (depositAmount > 0) {
-      calculatedPrice = basePrice - (depositAmount / parseInt(durationMonths));
+      calculatedPrice = basePrice - ((depositAmount * 1.025) / parseInt(durationMonths));
     }
     // Ensure monthly price stays positive
     if (calculatedPrice <= 0) {
@@ -437,10 +437,11 @@ exports.calculatePrice = async (req, res) => {
     const savings = baseTotalCost - (totalCost + depositAmount);
 
     return res.status(200).json({
-      monthlyPrice: parseFloat(calculatedPrice.toFixed(2)),
-      totalCost: parseFloat(totalCost.toFixed(2)),
-      savings: parseFloat(savings.toFixed(2)),
-      depositValue: depositAmount,
+      // Erst runden (Ganzzahl), dann zu String mit 2 Dezimalstellen konvertieren
+      monthlyPrice: Math.round(calculatedPrice).toFixed(2),
+      totalCost: Math.round(totalCost).toFixed(2),
+      savings: Math.round(savings).toFixed(2),
+      depositValue: Math.round(depositAmount).toFixed(2),
       durationType: validDurationType
     });
   } catch (error) {

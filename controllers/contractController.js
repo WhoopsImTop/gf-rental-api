@@ -10,6 +10,7 @@ const {
 const { getGeoData } = require("../services/geoCoder");
 const { generateContractPdf } = require("../services/export/contractExport");
 const { orderAdminNotification } = require("../services/notification/order");
+const { getUserScore } = require("../services/auth/personalScore");
 
 exports.getAllContracts = async (req, res) => {
   try {
@@ -70,9 +71,10 @@ exports.createContract = async (req, res) => {
           "error",
           "Creating Contract lasted in Error because of missing userID",
         );
-        res.status(400).json({
-          message: "No UserId Provided. Please try again",
-        });
+        if (!userId) {
+          // Wirf einen Fehler, der die Transaktion abbricht!
+          throw new Error("MISSING_USER_ID");
+        }
       }
 
       // 1. Create or Update CustomerDetails
@@ -124,19 +126,6 @@ exports.createContract = async (req, res) => {
         });
       }
 
-      //get Lat Lng
-      let lat = null;
-      let lon = null;
-      if (detailsPayload.street && detailsPayload.city) {
-        const address = `${detailsPayload.street} ${detailsPayload.housenumber}, ${detailsPayload.postalCode} ${detailsPayload.city}`;
-        const geoData = await getGeoData(address);
-        lat = geoData?.lat;
-        lon = geoData?.lon;
-      }
-
-      // 2. Create Contract
-
-      //2.1 Create duration, monthlyPrice and totalcosts
       const Cart = await db.Cart.findOne({
         where: { id: cartId },
         include: [
@@ -164,6 +153,43 @@ exports.createContract = async (req, res) => {
         ],
       });
 
+      let userScore = { score: "Kein Score vorhanden" }
+      if (!Cart.syncedByCantamen) {
+        // check if personal score of user is matching the score in the settings
+        const settings = await db.Setting.findOne();
+        userScore = await getUserScore(customerDetails.firstName, customerDetails.lastName, customerDetails.birthday, customerDetails.street + " " + customerDetails.housenumber, customerDetails.postalCode, customerDetails.city, cartId);
+        //the score is between P and A and our settingkey is allowedScore
+        console.log(userScore.score, settings.allowedScore)
+        if (userScore.score > settings.allowedScore) {
+          throw new Error("SCORE_REJECTED");
+        }
+      }
+
+      //check if color is already ordered if so return a message and a redirectUrl /leider-abonniert
+      const color = await db.CarAboColor.findOne({
+        where: {
+          id: colorId,
+          isOrdered: true,
+        },
+      });
+
+      if (color) {
+        throw new Error("COLOR_ALREADY_ORDERED");
+      }
+
+      //get Lat Lng
+      let lat = null;
+      let lon = null;
+      if (detailsPayload.street && detailsPayload.city) {
+        const address = `${detailsPayload.street} ${detailsPayload.housenumber}, ${detailsPayload.postalCode} ${detailsPayload.city}`;
+        const geoData = await getGeoData(address);
+        lat = geoData?.lat;
+        lon = geoData?.lon;
+      }
+
+      // 2. Create Contract
+
+      //2.1 Create duration, monthlyPrice and totalcosts
       const syncedByCantamen = Cart.syncedByCantamen || false;
 
       let selectedPrice = null;
@@ -182,16 +208,19 @@ exports.createContract = async (req, res) => {
       const depVal = parseFloat(Cart.depositValue) || 0;
       let monthlyPrice = basePrice;
       if (depVal > 0) {
-        monthlyPrice = basePrice - Math.floor((depVal * 1.025 / parseInt(duration)));
+        monthlyPrice = basePrice - (depVal * 1.025 / parseInt(duration));
       }
-      monthlyPrice = parseFloat(monthlyPrice.toFixed(2));
+      //check if insurance is included and add it to the monthly price
+      if (contractData.insurancePackage) {
+        monthlyPrice += parseFloat(contractData.insuranceCosts);
+      }
+      monthlyPrice = Math.round(monthlyPrice);
       const totalCost = duration * monthlyPrice;
 
       const contract = await db.Contract.create(
         {
           userId,
           duration: contractData.duration,
-          monthlyPrice: contractData.monthlyPrice,
           totalCost: contractData.totalCost,
           startingDate: contractData.startingDate,
           insurancePackage: contractData.insurancePackage || false,
@@ -221,7 +250,7 @@ exports.createContract = async (req, res) => {
           // Status
           oderStatus: "started",
           duration: duration,
-          monthlyPrice: monthlyPrice,
+          monthlyPrice: monthlyPrice.toFixed(2) || monthlyPrice,
           totalCost: totalCost,
           orderCompleted: true,
           carAboId: Cart.carAboId,
@@ -231,6 +260,7 @@ exports.createContract = async (req, res) => {
           depositValue: Cart.depositValue,
           calculatedMonthlyPrice: Cart.calculatedMonthlyPrice,
           syncedByCantamen: syncedByCantamen,
+          score: userScore.score || 'Kein Score vorhanden',
           lat: lat,
           lng: lon,
         },
@@ -326,8 +356,8 @@ exports.createContract = async (req, res) => {
         }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.IdCardNumber
         }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Monatliche Rate</td><td style="padding: 8px 16px; margin: 0;border-bottom: 1px solid #efefef">${contract.monthlyPrice} €</td></tr>
-        ${contract.depositValue > 0 ? `<tr><td style="padding: 8px 16px; margin: 0;">Anzahlung (Einmalig)</td><td style="padding: 8px 16px; margin: 0;">${contract.depositValue} €</td></tr>` : ''
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Monatliche Gesamtrate:</td><td style="padding: 8px 16px; margin: 0;border-bottom: 1px solid #efefef">${parseFloat(contract.monthlyPrice).toFixed(2)} €</td></tr>
+        ${contract.depositValue > 0 ? `<tr><td style="padding: 8px 16px; margin: 0;">Anzahlung (Einmalig)</td><td style="padding: 8px 16px; margin: 0;">${parseFloat(contract.depositValue).toFixed(2)} €</td></tr>` : ''
         }
         </tbody>
       </table>
@@ -377,8 +407,22 @@ exports.createContract = async (req, res) => {
       message: "Contract created successfully",
       contractId: result.id,
     });
+    // ÄUSSERER Catch-Block:
   } catch (error) {
     console.error("Error creating contract:", error);
+
+    // Eigene Fehler abfangen und richtig beantworten
+    if (error.message === "MISSING_USER_ID") {
+      return res.status(400).json({ message: "No UserId Provided. Please try again" });
+    }
+    if (error.message === "SCORE_REJECTED") {
+      return res.status(200).json({ message: "User score is not matching the score in the settings", redirectUrl: "/nicht-abonnierbar" });
+    }
+    if (error.message === "COLOR_ALREADY_ORDERED") {
+      return res.status(200).json({ message: "Color is already ordered", redirectUrl: "/leider-abonniert" });
+    }
+
+    // Genereller Server-Fehler
     logger("error", "Error creating contract" + error);
     res.status(500).json({
       message: "Internal server error",

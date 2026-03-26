@@ -33,36 +33,28 @@ exports.orderAdminNotification = async (id) => {
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <table style="width: 100%; border: 1px solid #efefef;">
         <tbody>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            user.firstName
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            user.lastName
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            user.customerDetails.street
-          } ${user.customerDetails.housenumber}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">PLZ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            user.customerDetails.postalCode
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            user.customerDetails.city
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            contract.startingDate
-              ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
-                  day: "numeric",
-                  month: "long",
-                  year: "2-digit",
-                })
-              : "-"
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            contract.duration
-          } ${contract.duration > 1 ? "Monate" : "Monat"}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0;">Monatliche Rate</td><td style="padding: 8px 16px; margin: 0;">${
-            contract.monthlyPrice
-          } €</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.firstName
+      }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.lastName
+      }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.street
+      } ${user.customerDetails.housenumber}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">PLZ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.postalCode
+      }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.city
+      }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.startingDate
+        ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
+          day: "numeric",
+          month: "long",
+          year: "2-digit",
+        })
+        : "-"
+      }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.duration
+      } ${contract.duration > 1 ? "Monate" : "Monat"}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0;">Monatliche Rate</td><td style="padding: 8px 16px; margin: 0;">${parseFloat(contract.monthlyPrice).toFixed(2)
+      } €</td></tr>
         </tbody>
       </table>
       <p>Bitte überprüfe die Bestellung, generiere den Vertrag und sende den vervollständigten Vertrag an den Kunden.</p>
@@ -77,8 +69,7 @@ exports.orderAdminNotification = async (id) => {
     const emailSent = await sendNotificationEmail(
       setting.notificationEmails,
       null,
-      `Neue Auto Abo Bestellung(${
-        autoAbo.vehicleStatus === "new" ? "Neuwagen" : "Gebrauchtwagen"
+      `Neue Auto Abo Bestellung(${autoAbo.vehicleStatus === "new" ? "Neuwagen" : "Gebrauchtwagen"
       }) ${autoAbo.displayName}`,
       generatedEmailContent,
     );
