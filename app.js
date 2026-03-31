@@ -16,6 +16,7 @@ const statusRoute = require("./routes/crm/statusRoute");
 const userRoute = require("./routes/general/userRoute");
 const cartRoute = require("./routes/cartRoute");
 const deliveryCostsRoute = require("./routes/deliveryCosts");
+const deliveryPlacesRoute = require("./routes/deliveryPlaces");
 const emailRoute = require("./routes/emailRoute");
 const settingRoute = require("./routes/settingRoute");
 const contactRoute = require("./routes/website/contactRoute");
@@ -76,6 +77,7 @@ app.use("/api/uploads", uploadRoute);
 app.use("/api/contracts", contractRoute);
 app.use("/api/cart", cartRoute);
 app.use("/api/delivery-costs", deliveryCostsRoute);
+app.use("/api/delivery-places", deliveryPlacesRoute);
 app.use("/api/mail", emailRoute);
 app.use("/api/settings", settingRoute);
 

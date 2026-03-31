@@ -20,7 +20,9 @@ exports.getGeoData = async (address) => {
     if (response.data.features.length === 0) {
       throw new Error("No data found");
     }
-    return response.data.features[0].properties;
+    //check if one of the results has country_code DE
+    const result = response.data.features.find(feature => feature.properties.country_code === 'de');
+    return result ? result.properties : response.data.features[0].properties;
   } catch (error) {
     logger('error', error.message);
     throw new Error(error);
