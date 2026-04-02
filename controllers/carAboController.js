@@ -142,12 +142,6 @@ const normalizeCarAboPayload = (payload = {}) => {
   ) {
     normalized.energyConsumptionCombinedWltp = normalized.consumptionCity;
   }
-  if (
-    normalized.electricRangeWltp == null &&
-    normalized.consumptionHighway != null
-  ) {
-    normalized.electricRangeWltp = normalized.consumptionHighway;
-  }
 
   // Forward compatibility: new WLTP fields -> old fields used in frontend
   if (
