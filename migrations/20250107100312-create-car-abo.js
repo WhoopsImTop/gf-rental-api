@@ -40,8 +40,8 @@ module.exports = {
         type: Sequelize.DECIMAL(4, 1),
       },
       consumptionHighway: {
-        type: Sequelize.DECIMAL(4, 1),
-      },
+        type: Sequelize.STRING,
+      },  
       description: {
         type: Sequelize.TEXT,
       },
