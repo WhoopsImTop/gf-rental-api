@@ -130,10 +130,6 @@ const normalizeCarAboPayload = (payload = {}) => {
   if (hasField("consumptionCity")) {
     normalized.energyConsumptionCombinedWltp = normalized.consumptionCity;
   }
-  if (hasField("consumptionHighway")) {
-    normalized.electricRangeWltp = parseNullableString(payload.consumptionHighway);
-    normalized.consumptionHighway = parseNullableString(payload.consumptionHighway);
-  }
 
   // Backward compatibility: old fields -> new WLTP fields
   if (
