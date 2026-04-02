@@ -13,22 +13,48 @@ exports.syncCart = async (req, res) => {
     }
 
     // Logic to merge or create
-    let { carAboId, colorId, priceId, durationType, depositValue, calculatedMonthlyPrice } = cartContent;
+    let { carAboId, colorId, priceId, durationType, depositValue, calculatedMonthlyPrice } =
+      cartContent || {};
+
+    if (!carAboId || !priceId) {
+      return res.status(400).json({
+        message:
+          "Fahrzeug oder Preis fehlt. Bitte schließe die Konfiguration erneut ab.",
+      });
+    }
 
     // Validate durationType
     const validDurationType = durationType === 'minimum' ? 'minimum' : 'fixed';
 
     //check if the calculatedMonthlyPrice from the client is correct
     const carAbo = await db.CarAbo.findByPk(carAboId, {
-      include: [{
-        model: db.CarAboPrice, as: "prices",
-        where: {
-          id: priceId,
-        }
-      }]
+      include: [
+        {
+          model: db.CarAboPrice,
+          as: 'prices',
+          where: {
+            id: priceId,
+          },
+          required: false,
+        },
+      ],
     });
 
-    const selectedPrice = carAbo.prices[0];
+    if (!carAbo) {
+      return res.status(400).json({
+        message: 'Das gewählte Fahrzeug wurde nicht gefunden. Bitte wähle es erneut aus.',
+      });
+    }
+
+    const selectedPrice =
+      carAbo.prices && carAbo.prices.length > 0 ? carAbo.prices[0] : null;
+
+    if (!selectedPrice) {
+      return res.status(400).json({
+        message:
+          'Die gewählte Preiskombination ist nicht mehr gültig. Bitte konfiguriere das Fahrzeug erneut.',
+      });
+    }
 
     // Determine base price based on durationType
     const basePrice = validDurationType === 'minimum'
@@ -45,7 +71,12 @@ exports.syncCart = async (req, res) => {
 
     // Ensure monthly price stays positive
     if (calculatedPrice <= 0) {
-      return res.status(400).json({ error: "Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein." });
+      return res.status(400).json({
+        message:
+          'Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein.',
+        error:
+          'Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein.',
+      });
     }
 
     calculatedPrice = Math.round(parseFloat(calculatedPrice.toFixed(2)));
@@ -128,7 +159,11 @@ exports.getCart = async (req, res) => {
     });
 
     if (!cart) {
-      return res.status(404).json({ error: "Cart not found" });
+      return res.status(404).json({
+        message:
+          "Der Warenkorb wurde nicht gefunden. Bitte konfiguriere dein Fahrzeug erneut.",
+        error: "Cart not found",
+      });
     }
 
     // Find the selected color and price

@@ -58,7 +58,7 @@ exports.createContract = async (req, res) => {
     carAboId,
     colorId,
     userId,
-    customerDetails, // birthday, street, housenumber, postalCode, city, country, driversLicenseNumber, IdCardNumber, newsletter, consents
+    customerDetails, // birthday, street, housenumber, postalCode, city, country, driversLicenseNumber, IdCardNumber, newsletter, consents, allowedLicenseClasses, licenseValidUntil, licenseIssuingPlace, licenseIssuedOn, placeOfBirth
     contractData, // duration, startingDate, monthlyPrice, totalCost, insurancePackage, insuranceCosts, familyAndFriends, delivery options
     paymentData, // iban, accountHolderName, sepaMandate, score
     cartId,
@@ -83,6 +83,10 @@ exports.createContract = async (req, res) => {
         transaction,
       });
 
+      //Make licenseIssuedOn and licenseValidUntil ISO date
+      const licenseIssuedOn = new Date(customerDetails.licenseIssuedOn);
+      const licenseValidUntil = new Date(customerDetails.licenseValidUntil);
+
       const detailsPayload = {
         userId,
         birthday: customerDetails.birthday,
@@ -98,6 +102,11 @@ exports.createContract = async (req, res) => {
         acceptPrivacyPolicy: customerDetails.acceptPrivacyPolicy || true,
         driversLicenseNumber: customerDetails.driversLicenseNumber,
         IdCardNumber: customerDetails.IdCardNumber,
+        allowedLicenseClasses: customerDetails.allowedLicenseClasses,
+        licenseValidUntil: licenseValidUntil,
+        licenseIssuingPlace: customerDetails.licenseIssuingPlace,
+        licenseIssuedOn: licenseIssuedOn,
+        placeOfBirth: customerDetails.placeOfBirth,
       };
 
       if (details) {
@@ -153,6 +162,10 @@ exports.createContract = async (req, res) => {
         ],
       });
 
+      if (!Cart) {
+        throw new Error("CART_NOT_FOUND");
+      }
+
       let userScore = { score: "Kein Score vorhanden" };
       if (!Cart.syncedByCantamen) {
         // check if personal score of user is matching the score in the settings
@@ -206,6 +219,10 @@ exports.createContract = async (req, res) => {
         selectedPrice = Cart.car.prices.find(
           (price) => price.id === Cart.priceId,
         );
+      }
+
+      if (!selectedPrice) {
+        throw new Error("PRICE_CONFIGURATION_INVALID");
       }
 
       const duration = selectedPrice.durationMonths;
@@ -334,10 +351,8 @@ exports.createContract = async (req, res) => {
 
       const emailContent = `
 <img src="${autoAbo.colors[0].media.url}" width="100%" height="auto"/>
-<p>Hallo ${user.firstName + "," ?? ""}</p>
+<p>Guten Tag Herr ${user.lastName + "," ?? ""}</p>
       <p>Hiermit bestätigen wir Ihr Abo Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
-      <p><strong>Um die Übergabe zu erleichtern, schicken Sie uns Bitte eine Kopie der Vorder- und Rückseite ihres Personalausweises und Führerscheins zu.</strong></p>
-      <p><a href="mailto:autoabo@gruene-flotte.com" style="display: inline-block; background-color: #82ba26; padding: 8px 16px; border-radius: 12px; color: #ffffff; text-decoration: none; font-weight: 900;">autoabo@gruene-flotte.com</a></p>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Ihre Daten</h2>
       <table style="width: 100%; border: 1px solid #efefef;">
@@ -396,7 +411,6 @@ exports.createContract = async (req, res) => {
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Nächste Schritte</h2>
         <ol style="padding-left: 15px">
-          ${contract.syncedByCantamen ? "" : '<li><strong>Bitte senden Sie uns eine Kopie Ihres Personalausweises und Führerscheins</strong><br>Bitte senden Sie die Dateien an folgende E-Mail-Adresse: <a style="color: #82ba26" href="mailto:autoabo@gruene-flotte.com">autoabo@gruene-flotte.com</a></li>'}
           <li><strong>Vertrag und Übergabe</strong><br>
           Wir überprüfen Ihre Angaben und senden Ihnen Ihren Vertrag und das Bestätigte Übergabedatum zu.</li>
           <li><strong>Vertragsunterschrift</strong><br>Bitte senden Sie uns den Vertrag unterschrieben zurück.</li>
@@ -450,20 +464,27 @@ exports.createContract = async (req, res) => {
         .json({ message: "No UserId Provided. Please try again" });
     }
     if (error.message === "SCORE_REJECTED") {
-      return res
-        .status(200)
-        .json({
-          message: "User score is not matching the score in the settings",
-          redirectUrl: "/nicht-abonnierbar",
-        });
+      return res.status(200).json({
+        message: "User score is not matching the score in the settings",
+        redirectUrl: "/nicht-abonnierbar",
+      });
     }
     if (error.message === "COLOR_ALREADY_ORDERED") {
-      return res
-        .status(200)
-        .json({
-          message: "Color is already ordered",
-          redirectUrl: "/leider-abonniert",
-        });
+      return res.status(200).json({
+        message: "Color is already ordered",
+        redirectUrl: "/leider-abonniert",
+      });
+    }
+    if (error.message === "CART_NOT_FOUND") {
+      return res.status(400).json({
+        message: "Warenkorb nicht gefunden. Bitte starte die Buchung erneut.",
+      });
+    }
+    if (error.message === "PRICE_CONFIGURATION_INVALID") {
+      return res.status(400).json({
+        message:
+          "Die gewählte Preiskonfiguration ist nicht mehr gültig. Bitte Fahrzeug erneut konfigurieren.",
+      });
     }
 
     // Genereller Server-Fehler

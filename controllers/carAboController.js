@@ -56,6 +56,107 @@ const carAboAdminIncludes = [
   },
 ];
 
+const normalizeCarAboPayload = (payload = {}) => {
+  const normalized = { ...payload };
+  const hasField = (field) =>
+    Object.prototype.hasOwnProperty.call(payload, field);
+
+  const numericIntFields = [
+    "co2Emission",
+    "displacement",
+    "doors",
+    "evRange",
+    "milage",
+    "modelYear",
+    "power",
+    "discount",
+    "seats",
+    "electricRangeWltp",
+  ];
+
+  const numericDecimalFields = [
+    "consumption",
+    "consumptionCity",
+    "consumptionHighway",
+    "energyConsumptionCombinedWltp",
+    "strikePrice",
+  ];
+
+  const parseNullableInt = (value) => {
+    if (value === "" || value == null) {
+      return null;
+    }
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? value : parsed;
+  };
+
+  const parseNullableDecimal = (value) => {
+    if (value === "" || value == null) {
+      return null;
+    }
+    const normalizedNumber =
+      typeof value === "string" ? value.replace(",", ".") : value;
+    const parsed = Number.parseFloat(normalizedNumber);
+    return Number.isNaN(parsed) ? value : parsed;
+  };
+
+  for (const field of numericIntFields) {
+    if (field in normalized) {
+      normalized[field] = parseNullableInt(normalized[field]);
+    }
+  }
+
+  for (const field of numericDecimalFields) {
+    if (field in normalized) {
+      normalized[field] = parseNullableDecimal(normalized[field]);
+    }
+  }
+
+  // If legacy CRM fields are explicitly sent, they take precedence.
+  // This allows clearing values via empty input ("") -> null.
+  if (hasField("consumptionCity")) {
+    normalized.energyConsumptionCombinedWltp = normalized.consumptionCity;
+  }
+  if (hasField("consumptionHighway")) {
+    normalized.electricRangeWltp = parseNullableInt(payload.consumptionHighway);
+    normalized.consumptionHighway = parseNullableDecimal(
+      payload.consumptionHighway,
+    );
+  }
+
+  // Backward compatibility: old fields -> new WLTP fields
+  if (
+    normalized.energyConsumptionCombinedWltp == null &&
+    normalized.consumptionCity != null
+  ) {
+    normalized.energyConsumptionCombinedWltp = normalized.consumptionCity;
+  }
+  if (
+    normalized.electricRangeWltp == null &&
+    normalized.consumptionHighway != null
+  ) {
+    normalized.electricRangeWltp = normalized.consumptionHighway;
+  }
+
+  // Forward compatibility: new WLTP fields -> old fields used in frontend
+  if (
+    normalized.consumptionCity == null &&
+    !hasField("consumptionCity") &&
+    normalized.energyConsumptionCombinedWltp != null
+  ) {
+    normalized.consumptionCity = normalized.energyConsumptionCombinedWltp;
+  }
+  if (
+    normalized.consumptionHighway == null &&
+    !hasField("consumptionHighway") &&
+    normalized.electricRangeWltp != null
+  ) {
+    normalized.consumptionHighway = normalized.electricRangeWltp;
+  }
+
+  return normalized;
+};
+
 const replaceChildren = async (Model, items, carAboId, transaction) => {
   if (!Array.isArray(items)) {
     return;
@@ -148,7 +249,8 @@ const updateColorsWithExteriorImages = async (items, carAboId, transaction) => {
 };
 
 exports.createCarAbo = async (req, res) => {
-  const { prices, colors, media, ...carAboPayload } = req.body;
+  const { prices, colors, media, ...rawCarAboPayload } = req.body;
+  const carAboPayload = normalizeCarAboPayload(rawCarAboPayload);
 
   // Calculate availableFrom if availableInDays is provided
   if (carAboPayload.availableInDays && !carAboPayload.availableFrom) {
@@ -320,7 +422,8 @@ exports.findOneCarAbo = async (req, res) => {
 
 exports.updateCarAbo = async (req, res) => {
   const { id } = req.params;
-  const { prices, colors, media, ...carAboPayload } = req.body;
+  const { prices, colors, media, ...rawCarAboPayload } = req.body;
+  const carAboPayload = normalizeCarAboPayload(rawCarAboPayload);
 
   // Calculate availableFrom if availableInDays is provided
   if (carAboPayload.availableInDays && !carAboPayload.availableFrom) {
@@ -370,7 +473,7 @@ exports.updateCarAbo = async (req, res) => {
 
     return res.status(200).json(updatedCarAbo);
   } catch (error) {
-    logger("error", `[updateCarAbo] ${error.message} ${req.body}`);
+    logger("error", `[updateCarAbo] ${error.message} ${JSON.stringify(req.body)}`);
     return res.status(500).send({ error: error.message });
   }
 };

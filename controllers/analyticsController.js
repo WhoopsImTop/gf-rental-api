@@ -4,6 +4,123 @@ const { PageVisit } = require('../models');
 const { Op } = require('sequelize');
 const sequelize = require('sequelize');
 
+const buildCartStats = async (sinceDate) => {
+  const db = require('../models');
+  const dbSequelize = db.sequelize;
+
+  const replacements = { since: sinceDate };
+
+  const summarySql = `
+    SELECT
+      COUNT(*) AS totalStarted,
+      SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) AS totalCompleted,
+      AVG(CASE WHEN depositValue IS NOT NULL THEN depositValue ELSE NULL END) AS avgDepositValueStarted,
+      SUM(CASE WHEN depositValue IS NOT NULL THEN 1 ELSE 0 END) AS depositProvidedCountStarted,
+      AVG(CASE WHEN completed = 1 AND depositValue IS NOT NULL THEN depositValue ELSE NULL END) AS avgDepositValueCompleted,
+      SUM(CASE WHEN completed = 1 AND depositValue IS NOT NULL THEN 1 ELSE 0 END) AS depositProvidedCountCompleted
+    FROM Carts
+    WHERE createdAt >= :since
+  `;
+
+  const topVehiclesSql = `
+    SELECT
+      c.carAboId AS carAboId,
+      COALESCE(car.displayName, CAST(c.carAboId AS CHAR)) AS vehicleDisplayName,
+      COUNT(*) AS startedCount,
+      SUM(CASE WHEN c.completed = 1 THEN 1 ELSE 0 END) AS completedCount,
+      AVG(CASE WHEN c.depositValue IS NOT NULL THEN c.depositValue ELSE NULL END) AS avgDepositValueStarted,
+      AVG(CASE WHEN c.completed = 1 AND c.depositValue IS NOT NULL THEN c.depositValue ELSE NULL END) AS avgDepositValueCompleted
+    FROM Carts c
+    LEFT JOIN CarAbos car ON car.id = c.carAboId
+    WHERE c.createdAt >= :since
+    GROUP BY c.carAboId, car.displayName
+    ORDER BY startedCount DESC
+    LIMIT 10
+  `;
+
+  const topMileageDurationSql = `
+    SELECT
+      p.durationMonths AS durationMonths,
+      p.mileageKm AS mileageKm,
+      COUNT(*) AS startedCount,
+      SUM(CASE WHEN c.completed = 1 THEN 1 ELSE 0 END) AS completedCount,
+      AVG(CASE WHEN c.depositValue IS NOT NULL THEN c.depositValue ELSE NULL END) AS avgDepositValueStarted
+    FROM Carts c
+    INNER JOIN CarAboPrices p ON p.id = c.priceId
+    WHERE c.createdAt >= :since
+    GROUP BY p.durationMonths, p.mileageKm
+    ORDER BY startedCount DESC
+    LIMIT 10
+  `;
+
+  const [summaryRows] = await dbSequelize.query(summarySql, { replacements });
+  const summary = summaryRows?.[0] || {};
+
+  const toNum = (v) => {
+    if (v === null || v === undefined) return null;
+    const n = typeof v === 'string' ? Number(v) : v;
+    return Number.isNaN(n) ? null : n;
+  };
+
+  const parseAvg = (v) => {
+    if (v === null || v === undefined) return null;
+    const n = typeof v === 'string' ? parseFloat(v) : v;
+    return Number.isNaN(n) ? null : n;
+  };
+
+  const totalStarted = toNum(summary.totalStarted) || 0;
+  const totalCompleted = toNum(summary.totalCompleted) || 0;
+  const completionRate = totalStarted > 0 ? (totalCompleted / totalStarted) * 100 : 0;
+
+  const avgDepositValueStarted = parseAvg(summary.avgDepositValueStarted);
+  const depositProvidedCountStarted = toNum(summary.depositProvidedCountStarted) || 0;
+  const avgDepositValueCompleted = parseAvg(summary.avgDepositValueCompleted);
+  const depositProvidedCountCompleted = toNum(summary.depositProvidedCountCompleted) || 0;
+
+  const [vehicleRows] = await dbSequelize.query(topVehiclesSql, { replacements });
+  const [comboRows] = await dbSequelize.query(topMileageDurationSql, { replacements });
+
+  const topVehicles = (vehicleRows || []).map((r) => {
+    const startedCount = toNum(r.startedCount) || 0;
+    const completedCount = toNum(r.completedCount) || 0;
+    return {
+      carAboId: r.carAboId,
+      vehicleDisplayName: r.vehicleDisplayName,
+      startedCount,
+      completedCount,
+      completionRate: startedCount > 0 ? (completedCount / startedCount) * 100 : 0,
+      avgDepositValueStarted: parseAvg(r.avgDepositValueStarted),
+      avgDepositValueCompleted: parseAvg(r.avgDepositValueCompleted),
+    };
+  });
+
+  const topMileageDuration = (comboRows || []).map((r) => {
+    const startedCount = toNum(r.startedCount) || 0;
+    const completedCount = toNum(r.completedCount) || 0;
+    return {
+      durationMonths: toNum(r.durationMonths),
+      mileageKm: toNum(r.mileageKm),
+      startedCount,
+      completedCount,
+      completionRate: startedCount > 0 ? (completedCount / startedCount) * 100 : 0,
+      avgDepositValueStarted: parseAvg(r.avgDepositValueStarted),
+    };
+  });
+
+  return {
+    timeframeDays: 30,
+    totalStartedCarts: totalStarted,
+    totalCompletedCarts: totalCompleted,
+    completionRate,
+    avgDepositValueStarted,
+    depositProvidedCountStarted,
+    avgDepositValueCompleted,
+    depositProvidedCountCompleted,
+    topVehicles,
+    topMileageDuration,
+  };
+};
+
 exports.trackVisit = async (req, res) => {
   try {
     const { session_id, page_url, duration_seconds, referrer, campaign } = req.body;
@@ -168,6 +285,8 @@ exports.getStats = async (req, res) => {
       limit: 10
     });
 
+    const cartStats = await buildCartStats(thirtyDaysAgo);
+
     res.status(200).json({
       totalVisitors: totalVisitorsCount,
       totalOrders,
@@ -183,7 +302,8 @@ exports.getStats = async (req, res) => {
       },
       referrers,
       campaigns,
-      countries
+      countries,
+      cartStats,
     });
   } catch (error) {
     console.error('Error getting analytics stats:', error);

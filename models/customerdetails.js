@@ -56,26 +56,27 @@ module.exports = (sequelize, DataTypes) => {
           return value ? decrypt(value) : null;
         },
       },
-      city: { // Added city as it was missing in target content block logic if I select broadly, but let's confirm file content first. File view showed it.
+      city: {
+        // Added city as it was missing in target content block logic if I select broadly, but let's confirm file content first. File view showed it.
         type: DataTypes.STRING,
         set(value) {
-             this.setDataValue("city", encrypt(value));
+          this.setDataValue("city", encrypt(value));
         },
         get() {
-            const value = this.getDataValue("city");
-            return value ? decrypt(value) : null;
-        }
+          const value = this.getDataValue("city");
+          return value ? decrypt(value) : null;
+        },
       },
       country: {
         type: DataTypes.STRING,
         allowNull: false,
         set(value) {
-            this.setDataValue("country", encrypt(value));
+          this.setDataValue("country", encrypt(value));
         },
         get() {
-            const value = this.getDataValue("country");
-            return value ? decrypt(value) : null;
-        }
+          const value = this.getDataValue("country");
+          return value ? decrypt(value) : null;
+        },
       },
       newsletter: {
         type: DataTypes.BOOLEAN,
@@ -97,29 +98,70 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
         allowNull: false,
         set(value) {
-             this.setDataValue("driversLicenseNumber", encrypt(value));
+          this.setDataValue("driversLicenseNumber", encrypt(value));
         },
         get() {
-            const value = this.getDataValue("driversLicenseNumber");
-            return value ? decrypt(value) : null;
-        }
+          const value = this.getDataValue("driversLicenseNumber");
+          return value ? decrypt(value) : null;
+        },
       },
       IdCardNumber: {
         type: DataTypes.TEXT,
         allowNull: false,
         set(value) {
-             this.setDataValue("IdCardNumber", encrypt(value));
+          this.setDataValue("IdCardNumber", encrypt(value));
         },
         get() {
-            const value = this.getDataValue("IdCardNumber");
-            return value ? decrypt(value) : null;
-        }
+          const value = this.getDataValue("IdCardNumber");
+          return value ? decrypt(value) : null;
+        },
+      },
+      allowedLicenseClasses: {
+        type: DataTypes.TEXT,
+        allowNull: false,
+        set(value) {
+          this.setDataValue("allowedLicenseClasses", encrypt(value));
+        },
+        get() {
+          const value = this.getDataValue("allowedLicenseClasses");
+          return value ? decrypt(value) : null;
+        },
+      },
+      licenseValidUntil: {
+        type: DataTypes.DATE,
+        allowNull: false,
+      },
+      licenseIssuingPlace: {
+        type: DataTypes.TEXT,
+        allowNull: false,
+        set(value) {
+          this.setDataValue("licenseIssuingPlace", encrypt(value));
+        },
+        get() {
+          const value = this.getDataValue("licenseIssuingPlace");
+          return value ? decrypt(value) : null;
+        },
+      },
+      licenseIssuedOn: {
+        type: DataTypes.DATE,
+        allowNull: false,
+      },
+      placeOfBirth: {
+        type: DataTypes.TEXT,
+        allowNull: false,
+        set(value) {
+          this.setDataValue("placeOfBirth", encrypt(value));
+        },
+        get() {
+          const value = this.getDataValue("placeOfBirth");
+          return value ? decrypt(value) : null;
+        },
       },
     },
     {
       sequelize,
       modelName: "CustomerDetails",
-    }
+    },
   );
   return CustomerDetails;
 };

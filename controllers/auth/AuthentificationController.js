@@ -84,7 +84,9 @@ exports.verifyOtp = async (req, res) => {
     });
 
     if (!verification || verification.expiresAt < new Date()) {
-      return res.status(400).json({ message: "Invalid or expired OTP" });
+      return res.status(400).json({
+        message: "Der Code ist ungültig oder abgelaufen. Bitte fordere einen neuen Code an.",
+      });
     }
 
     let user = await User.scope("withPassword").findOne({
@@ -104,11 +106,24 @@ exports.verifyOtp = async (req, res) => {
     // Clean up used OTP (optional, or rely on expiration/cron)
     await verification.destroy();
 
-    //update Cart
-    const cartData = await Cart.update(
-      { userId: user.id },
-      { where: { id: req.body.cartId } }
-    );
+    if (!req.body.cartId) {
+      return res.status(400).json({
+        message:
+          "Es wurde kein Warenkorb übermittelt. Bitte wähle ein Fahrzeug aus und konfiguriere dein Abo erneut.",
+        code: "CART_REQUIRED",
+      });
+    }
+
+    const cartRow = await Cart.findByPk(req.body.cartId);
+    if (!cartRow) {
+      return res.status(400).json({
+        message:
+          "Der Warenkorb wurde nicht gefunden oder ist nicht mehr gültig. Bitte starte die Buchung erneut.",
+        code: "CART_NOT_FOUND",
+      });
+    }
+
+    await Cart.update({ userId: user.id }, { where: { id: req.body.cartId } });
 
     res.json({
       user: {
@@ -402,6 +417,23 @@ exports.cantamenAuth = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    if (!req.body.cartId) {
+      return res.status(400).json({
+        message:
+          "Es wurde kein Warenkorb übermittelt. Bitte wähle ein Fahrzeug aus und konfiguriere dein Abo erneut.",
+        code: "CART_REQUIRED",
+      });
+    }
+
+    const cartRow = await Cart.findByPk(req.body.cartId);
+    if (!cartRow) {
+      return res.status(400).json({
+        message:
+          "Der Warenkorb wurde nicht gefunden oder ist nicht mehr gültig. Bitte starte die Buchung erneut.",
+        code: "CART_NOT_FOUND",
+      });
+    }
+
     const authData = await authentificateWithCantamen(email, password);
     const { userData, sepaMandate } = await collectUserDataFromCantamen(
       authData.id
@@ -431,8 +463,7 @@ exports.cantamenAuth = async (req, res) => {
       await user.update({ cantamenCustomerId: userData.customerNumber });
     }
 
-    //update Cart
-    const cartData = await Cart.update(
+    await Cart.update(
       { userId: user.id, syncedByCantamen: true },
       { where: { id: req.body.cartId } },
     );
