@@ -51,9 +51,11 @@ module.exports = (sequelize, DataTypes) => {
       configDrive: DataTypes.STRING,
       consumption: DataTypes.DECIMAL(4, 1),
       consumptionCity: DataTypes.DECIMAL(4, 1),
-      consumptionHighway: DataTypes.DECIMAL(4, 1),
+      // WLTP elektrische Reichweite (kann Text enthalten, z.B. "400-500")
+      consumptionHighway: DataTypes.STRING,
       energyConsumptionCombinedWltp: DataTypes.DECIMAL(4, 1),
-      electricRangeWltp: DataTypes.INTEGER,
+      // Neue WLTP-Feld-Variante; bleibt absichtlich als String.
+      electricRangeWltp: DataTypes.STRING,
       description: DataTypes.TEXT,
       displayName: DataTypes.STRING,
       displacement: DataTypes.INTEGER,

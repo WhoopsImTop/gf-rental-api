@@ -41,13 +41,25 @@ async function generateContractPdf(contractInstance) {
       ? parseFloat(contractInstance.deliveryCosts || 0)
       : 0;
 
+    // Vertragsdauer in Monaten (Fallback auf möglichen Umbenennungen in anderen Datenflüssen)
+    const durationMonths =
+      contractInstance.laufzeit ?? contractInstance.duration ?? "";
+    const durationMonthsNumber = parseInt(durationMonths, 10);
+    const durationUnit =
+      !Number.isNaN(durationMonthsNumber) && durationMonthsNumber === 1
+        ? "Monat"
+        : "Monate";
+    const durationDisplay =
+      durationMonths === "" || Number.isNaN(durationMonthsNumber)
+        ? ""
+        : `${durationMonths} ${durationUnit}`;
+
     // Summenbildung für die Kostenaufstellung [cite: 38-43]
     const monatsgebuehrNettoGesamt =
       getNetto(bruttoMiete) + getNetto(bruttoHaftung);
     const mwstGesamt =
       getMwStAnteil(bruttoMiete) + getMwStAnteil(bruttoHaftung);
     const monatsgebuehrBruttoGesamt = bruttoMiete + bruttoHaftung;
-
     // --- Daten-Mapping (Orientiert an den Quellen 1-47) ---
     const fields = {
       // Kopfdaten
@@ -98,7 +110,7 @@ async function generateContractPdf(contractInstance) {
       geburtsort: contractInstance.User?.customerDetails?.placeOfBirth || "",
 
       // Vertragsdetails [cite: 24-37]
-      mindestlaufzeit: `${contractInstance.duration || ""} Monate`,
+      laufzeit: durationDisplay,
       kilometerleistung: `${contractInstance.price?.mileageKm || ""} km/Monat`,
       freikilometer: `${contractInstance.price?.mileageKm || ""} km/Monat`,
       mehrkilometer: "",
@@ -211,6 +223,9 @@ async function generateContractPdf(contractInstance) {
     setCheck("haftungsreduzierung_nein", !contractInstance.insurancePackage); // Haftungsreduzierung Nein [cite: 30]
     setCheck("fahrzeugzustellung_ja", contractInstance.wantsDelivery); // [cite: 32]
     setCheck("fahrzeugzustellung_nein", !contractInstance.wantsDelivery); // [cite: 33]
+
+    setCheck("mindestlaufzeit", contractInstance.durationType == "minimum");
+    setCheck("fixlaufzeit", contractInstance.durationType == "fixed");
 
     const pdfBytes = await pdfDoc.save();
     const fileName = `vertrag_${contractInstance.id}_${Date.now()}.pdf`;

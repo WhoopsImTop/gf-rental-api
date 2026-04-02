@@ -71,13 +71,11 @@ const normalizeCarAboPayload = (payload = {}) => {
     "power",
     "discount",
     "seats",
-    "electricRangeWltp",
   ];
 
   const numericDecimalFields = [
     "consumption",
     "consumptionCity",
-    "consumptionHighway",
     "energyConsumptionCombinedWltp",
     "strikePrice",
   ];
@@ -100,6 +98,15 @@ const normalizeCarAboPayload = (payload = {}) => {
     return Number.isNaN(parsed) ? value : parsed;
   };
 
+  const parseNullableString = (value) => {
+    if (value === "" || value == null) {
+      return null;
+    }
+    // Wichtig: WLTP-Werte können Text enthalten (z.B. "400-500", "ca. 400").
+    // Daher nicht "weg-parsen", sondern als String speichern.
+    return typeof value === "string" ? value : String(value);
+  };
+
   for (const field of numericIntFields) {
     if (field in normalized) {
       normalized[field] = parseNullableInt(normalized[field]);
@@ -112,16 +119,20 @@ const normalizeCarAboPayload = (payload = {}) => {
     }
   }
 
+  for (const field of ["electricRangeWltp", "consumptionHighway"]) {
+    if (field in normalized) {
+      normalized[field] = parseNullableString(normalized[field]);
+    }
+  }
+
   // If legacy CRM fields are explicitly sent, they take precedence.
   // This allows clearing values via empty input ("") -> null.
   if (hasField("consumptionCity")) {
     normalized.energyConsumptionCombinedWltp = normalized.consumptionCity;
   }
   if (hasField("consumptionHighway")) {
-    normalized.electricRangeWltp = parseNullableInt(payload.consumptionHighway);
-    normalized.consumptionHighway = parseNullableDecimal(
-      payload.consumptionHighway,
-    );
+    normalized.electricRangeWltp = parseNullableString(payload.consumptionHighway);
+    normalized.consumptionHighway = parseNullableString(payload.consumptionHighway);
   }
 
   // Backward compatibility: old fields -> new WLTP fields
