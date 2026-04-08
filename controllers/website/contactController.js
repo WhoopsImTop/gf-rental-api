@@ -8,7 +8,7 @@ exports.sendContactInquiry = async (req, res) => {
             return res.status(400).json({ error: "Missing required fields" });
         }
         const emailSent = await sendNotificationEmail(
-            'englen@khri8.com',
+            'autoabo@gruene-flotte.com',
             null,
             "Auto Abo Beratung",
             `Name: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nMessage: ${message}`,
