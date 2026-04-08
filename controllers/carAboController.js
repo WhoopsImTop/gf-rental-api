@@ -1,5 +1,26 @@
 const db = require("../models");
 const { logger } = require("../services/logging");
+const DEPOSIT_STEP = 50;
+const MAX_DEPOSIT_CAP = 5000;
+const DEPOSIT_FEE_FACTOR = 1.025;
+const MIN_DEPOSIT = 500;
+
+const floorToDepositStep = (value) =>
+  Math.floor(value / DEPOSIT_STEP) * DEPOSIT_STEP;
+
+const normalizeDepositAmount = (
+  rawDepositValue,
+  maxAllowedDeposit,
+  minAllowedDeposit = 0,
+) => {
+  const parsed = parseFloat(rawDepositValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  const clamped = Math.min(
+    Math.max(parsed, minAllowedDeposit),
+    maxAllowedDeposit,
+  );
+  return Math.round(clamped / DEPOSIT_STEP) * DEPOSIT_STEP;
+};
 
 const carAboIncludes = [
   { model: db.CarAboPrice, as: "prices" },
@@ -499,6 +520,14 @@ exports.calculatePrice = async (req, res) => {
   try {
     const { id } = req.params;
     const { depositValue, durationMonths, mileageKm, durationType } = req.body;
+    const durationMonthsInt = parseInt(durationMonths, 10);
+    const mileageKmInt = parseInt(mileageKm, 10);
+    if (!Number.isInteger(durationMonthsInt) || durationMonthsInt <= 0) {
+      return res.status(400).json({ error: "Ungültige Laufzeit." });
+    }
+    if (!Number.isInteger(mileageKmInt) || mileageKmInt <= 0) {
+      return res.status(400).json({ error: "Ungültige Kilometerleistung." });
+    }
 
     // Validate durationType, default to 'fixed'
     const validDurationType = durationType === 'minimum' ? 'minimum' : 'fixed';
@@ -512,7 +541,7 @@ exports.calculatePrice = async (req, res) => {
     }
 
     const selectedPrice = carAbo.prices.find(
-      (p) => p.durationMonths === parseInt(durationMonths) && p.mileageKm === parseInt(mileageKm)
+      (p) => p.durationMonths === durationMonthsInt && p.mileageKm === mileageKmInt
     );
 
     if (!selectedPrice) {
@@ -523,21 +552,33 @@ exports.calculatePrice = async (req, res) => {
     const basePrice = validDurationType === 'minimum'
       ? parseFloat(selectedPrice.priceMinimumDuration)
       : parseFloat(selectedPrice.priceFixedDuration);
+    if (!Number.isFinite(basePrice) || basePrice <= 0) {
+      return res.status(400).json({ error: "Ungültige Preisgrundlage." });
+    }
 
-    const depositAmount = parseFloat(depositValue) || 0;
+    const maxDepositByPrice =
+      (basePrice * durationMonthsInt - 0.01) / DEPOSIT_FEE_FACTOR;
+    const clampedDepositLimit = Math.min(maxDepositByPrice, MAX_DEPOSIT_CAP);
+    const maxAllowedDeposit = Math.max(0, floorToDepositStep(clampedDepositLimit));
+    const effectiveMinDeposit = Math.min(MIN_DEPOSIT, maxAllowedDeposit);
+    const depositAmount = normalizeDepositAmount(
+      depositValue,
+      maxAllowedDeposit,
+      effectiveMinDeposit,
+    );
 
     // Linear formula: reduce monthly price by deposit spread over duration
     let calculatedPrice = basePrice;
     if (depositAmount > 0) {
-      calculatedPrice = basePrice - ((depositAmount * 1.025) / parseInt(durationMonths));
+      calculatedPrice = basePrice - ((depositAmount * 1.025) / durationMonthsInt);
     }
     // Ensure monthly price stays positive
     if (calculatedPrice <= 0) {
       return res.status(400).json({ error: "Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein." });
     }
 
-    const totalCost = calculatedPrice * parseInt(durationMonths);
-    const baseTotalCost = basePrice * parseInt(durationMonths);
+    const totalCost = calculatedPrice * durationMonthsInt;
+    const baseTotalCost = basePrice * durationMonthsInt;
     const savings = baseTotalCost - (totalCost + depositAmount);
 
     return res.status(200).json({

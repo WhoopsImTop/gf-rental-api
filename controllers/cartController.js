@@ -1,5 +1,26 @@
 const db = require("../models");
 const { logger } = require("../services/logging");
+const DEPOSIT_STEP = 50;
+const MAX_DEPOSIT_CAP = 5000;
+const DEPOSIT_FEE_FACTOR = 1.025;
+const MIN_DEPOSIT = 500;
+
+const floorToDepositStep = (value) =>
+  Math.floor(value / DEPOSIT_STEP) * DEPOSIT_STEP;
+
+const normalizeDepositAmount = (
+  rawDepositValue,
+  maxAllowedDeposit,
+  minAllowedDeposit = 0,
+) => {
+  const parsed = parseFloat(rawDepositValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  const clamped = Math.min(
+    Math.max(parsed, minAllowedDeposit),
+    maxAllowedDeposit,
+  );
+  return Math.round(clamped / DEPOSIT_STEP) * DEPOSIT_STEP;
+};
 
 exports.syncCart = async (req, res) => {
   const { cartContent, userId } = req.body;
@@ -60,13 +81,30 @@ exports.syncCart = async (req, res) => {
     const basePrice = validDurationType === 'minimum'
       ? parseFloat(selectedPrice.priceMinimumDuration)
       : parseFloat(selectedPrice.priceFixedDuration);
+    const durationMonthsInt = parseInt(selectedPrice.durationMonths, 10);
+    if (!Number.isFinite(basePrice) || basePrice <= 0 || !Number.isInteger(durationMonthsInt) || durationMonthsInt <= 0) {
+      return res.status(400).json({
+        message: "Ungültige Preisdaten. Bitte konfiguriere das Fahrzeug erneut.",
+      });
+    }
 
-    const depositAmount = parseFloat(depositValue) || 0;
+    const maxDepositByPrice =
+      (basePrice * durationMonthsInt - 0.01) /
+      DEPOSIT_FEE_FACTOR;
+    const clampedDepositLimit = Math.min(maxDepositByPrice, MAX_DEPOSIT_CAP);
+    const maxAllowedDeposit = Math.max(0, floorToDepositStep(clampedDepositLimit));
+    const effectiveMinDeposit = Math.min(MIN_DEPOSIT, maxAllowedDeposit);
+    const depositAmount = normalizeDepositAmount(
+      depositValue,
+      maxAllowedDeposit,
+      effectiveMinDeposit,
+    );
+    depositValue = depositAmount;
 
     // Linear formula: reduce monthly price by deposit spread over duration
     let calculatedPrice = basePrice;
     if (depositAmount > 0) {
-      calculatedPrice = basePrice - ((depositAmount * 1.025) / parseInt(selectedPrice.durationMonths));
+      calculatedPrice = basePrice - ((depositAmount * 1.025) / durationMonthsInt);
     }
 
     // Ensure monthly price stays positive
