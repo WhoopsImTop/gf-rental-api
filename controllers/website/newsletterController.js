@@ -1,9 +1,9 @@
 exports.subscribeToNewsletter = async (req, res) => {
   try {
     //check if request was from *gruene-flotte.com domain
-    if (!req.headers.referer.includes("gruene-flotte.com")) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
+    //if (!req.headers.referer.includes("gruene-flotte.com")) {
+      //return res.status(403).json({ error: "Forbidden" });
+    //}
     //check if email is valid
     if (!req.body.email || !req.body.email.includes("@")) {
       return res.status(400).json({ error: "Invalid email" });

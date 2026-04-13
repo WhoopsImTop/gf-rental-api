@@ -21,6 +21,7 @@ const emailRoute = require("./routes/emailRoute");
 const settingRoute = require("./routes/settingRoute");
 const contactRoute = require("./routes/website/contactRoute");7
 const newsletterRoute = require("./routes/website/newsletterRoute");
+const sitemapRoute = require("./routes/website/sitemapRoute");
 
 const reviewRoute = require("./routes/website/reviewRoute");
 const contractRoute = require("./routes/contractRoute");
@@ -91,6 +92,7 @@ app.use("/api/mailing-list", newsletterRoute);
 app.use("/api/reviews", reviewRoute);
 app.use("/api/analytics", analyticsRoute);
 app.use("/api/business/contact", contactRoute);
+app.use("/api/sitemap.xml", sitemapRoute);
 
 // Server starten und Datenbankverbindung prüfen
 app.listen(serverPort, async () => {
