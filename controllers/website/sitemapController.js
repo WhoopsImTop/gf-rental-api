@@ -29,13 +29,29 @@ exports.getVehicleSitemap = async (req, res) => {
       order: [["id", "ASC"]],
     });
 
-    const urlEntries = carAbos
+    const base = frontendBaseUrl.replace(/\/+$/, "");
+    const staticSlugs = ["", "subscribe", "business"];
+    const staticNow = new Date().toISOString();
+
+    const staticEntries = staticSlugs
+      .map((slug) => {
+        const loc = slug ? `${base}/${slug}` : `${base}/`;
+        return [
+          "<url>",
+          `<loc>${escapeXml(loc)}</loc>`,
+          `<lastmod>${escapeXml(staticNow)}</lastmod>`,
+          "</url>",
+        ].join("");
+      })
+      .join("");
+
+    const vehicleEntries = carAbos
       .map((carAbo) => {
         const lastModifiedDate = carAbo.updatedAt || carAbo.createdAt;
         const lastModified = lastModifiedDate
           ? new Date(lastModifiedDate).toISOString()
           : null;
-        const vehicleUrl = `${frontendBaseUrl}/${carAbo.id}`;
+        const vehicleUrl = `${base}/${carAbo.id}`;
 
         return [
           "<url>",
@@ -47,6 +63,8 @@ exports.getVehicleSitemap = async (req, res) => {
           .join("");
       })
       .join("");
+
+    const urlEntries = staticEntries + vehicleEntries;
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>` +
       `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
