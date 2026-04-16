@@ -303,6 +303,7 @@ exports.createContract = async (req, res) => {
           accountHolderName: paymentData.accountHolderName,
           iban: paymentData.iban,
           sepaMandate: paymentData.sepaMandate || false,
+          mandateReference: paymentData.mandateReference || null,
           sepaMandateDate: paymentData.sepaMandate ? new Date() : null,
           score: paymentData.score || null,
           // Status

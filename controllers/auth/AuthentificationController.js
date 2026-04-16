@@ -441,7 +441,8 @@ exports.cantamenAuth = async (req, res) => {
     }
 
     const authData = await authentificateWithCantamen(email, password);
-    const { userData, sepaMandate } = await collectUserDataFromCantamen(
+    const { userData, sepaMandate, sepaMandateReference, sepaAccount } =
+      await collectUserDataFromCantamen(
       authData.id
     );
 
@@ -499,6 +500,9 @@ exports.cantamenAuth = async (req, res) => {
         driversLicenseClassesAllowed: userData.driverlicenseClassesAllowed,
         IdCardNumber: userData.identityNumber,
         hasCantamenSepa: sepaMandate,
+        iban: sepaAccount?.iban || null,
+        accountHolderName: sepaAccount?.accountHolder || null,
+        sepaMandateReference: sepaMandateReference || null,
       },
     });
   } catch (e) {
