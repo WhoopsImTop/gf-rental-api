@@ -68,6 +68,7 @@ async function generateContractPdf(contractInstance) {
       cantamenKundennummer: contractInstance.User?.cantamenCustomerId || "",
 
       // Mieter Informationen [cite: 11-20]
+      vornameNachname: `${contractInstance.User?.firstName || ""} ${contractInstance.User?.lastName || ""}`,
       mandatsreferenzNummer: contractInstance.mandateReference || "",
       iban: contractInstance.iban || "",
       kontoinhaber: contractInstance.accountHolderName || "",
