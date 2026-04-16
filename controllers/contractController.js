@@ -12,6 +12,29 @@ const { generateContractPdf } = require("../services/export/contractExport");
 const { orderAdminNotification } = require("../services/notification/order");
 const { getUserScore } = require("../services/auth/personalScore");
 
+function formatContractStartingDate(dateValue) {
+  if (!dateValue) return "-";
+
+  const value = String(dateValue).trim();
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  let date;
+
+  if (match) {
+    const [, year, month, day] = match;
+    date = new Date(Number(year), Number(month) - 1, Number(day));
+  } else {
+    date = new Date(value);
+  }
+
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("de-DE", {
+    day: "numeric",
+    month: "long",
+    year: "2-digit",
+  });
+}
+
 exports.getAllContracts = async (req, res) => {
   try {
     const contracts = await db.Contract.findAll({
@@ -366,15 +389,7 @@ exports.createContract = async (req, res) => {
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.city}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Telefon</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.phone}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Email</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.email}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            contract.startingDate
-              ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
-                  day: "numeric",
-                  month: "long",
-                  year: "2-digit",
-                })
-              : "-"
-          }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${formatContractStartingDate(contract.startingDate)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Sicherheitspaket</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
             contract.insuranceType === "premium"
               ? "Premium"
