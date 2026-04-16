@@ -159,6 +159,56 @@ module.exports = (sequelize, DataTypes) => {
       contractFile: {
         type: DataTypes.STRING,
       },
+      signStatus: {
+        type: DataTypes.ENUM(
+          "not_requested",
+          "pending_signature",
+          "signed",
+          "expired",
+        ),
+        allowNull: false,
+        defaultValue: "not_requested",
+      },
+      signTokenHash: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      signRequestedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      signExpiresAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      signTokenUsedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      signedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      signatureImagePath: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      signedContractFile: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      signatureIp: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      signatureUserAgent: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      signatureFullName: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       accountHolderName: {
         type: DataTypes.TEXT,
         set(value) {

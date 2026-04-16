@@ -1,8 +1,8 @@
-const { PDFDocument } = require("pdf-lib");
+const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 const fs = require("fs");
 const path = require("path");
 
-async function generateContractPdf(contractInstance) {
+async function generateContractPdf(contractInstance, options = {}) {
   try {
     // 1. Pfade definieren
     const templatePath = path.join(
@@ -60,6 +60,21 @@ async function generateContractPdf(contractInstance) {
     const mwstGesamt =
       getMwStAnteil(bruttoMiete) + getMwStAnteil(bruttoHaftung);
     const monatsgebuehrBruttoGesamt = bruttoMiete + bruttoHaftung;
+    const signatureFullName = options.signatureFullName || "";
+    const signatureDate = options.signedAt
+      ? new Date(options.signedAt)
+      : null;
+    const signatureDateLabel = signatureDate
+      ? signatureDate.toLocaleDateString("de-DE")
+      : "";
+    const signatureTimestamp = signatureDate
+      ? signatureDate.toLocaleString("de-DE")
+      : "";
+    const signaturePlace = contractInstance.User?.customerDetails?.city || "";
+    const signatureDateWithPlace =
+      signatureDateLabel && signaturePlace
+        ? `${signatureDateLabel}, ${signaturePlace}`
+        : signatureDateLabel || signaturePlace;
     // --- Daten-Mapping (Orientiert an den Quellen 1-47) ---
     const fields = {
       // Kopfdaten
@@ -189,13 +204,30 @@ async function generateContractPdf(contractInstance) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
+      customerContractSignature: signatureFullName,
+      customerContractDate: signatureDateWithPlace,
+      customerSEPASignature: "",
+      customerSEPADate: signatureDateWithPlace,
+    };
+
+    const setFieldValue = (fieldName, value, aliases = []) => {
+      const candidateNames = [fieldName, ...aliases];
+      for (const name of candidateNames) {
+        try {
+          const textField = form.getTextField(name);
+          textField.setText(String(value ?? ""));
+          return true;
+        } catch (error) {
+          // Try next alias
+        }
+      }
+      return false;
     };
 
     // Textfelder befüllen
     Object.entries(fields).forEach(([key, value]) => {
       try {
-        const textField = form.getTextField(key);
-        textField.setText(String(value));
+        setFieldValue(key, value);
       } catch (e) {
         console.info(`Feld-Mapping übersprungen: ${key}`);
       }
@@ -227,8 +259,114 @@ async function generateContractPdf(contractInstance) {
     setCheck("mindestlaufzeit", contractInstance.durationType == "minimum");
     setCheck("fixlaufzeit", contractInstance.durationType == "fixed");
 
+    if (options.signatureImageBuffer) {
+      const signatureImage = await pdfDoc.embedPng(options.signatureImageBuffer);
+      const proofFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const signatureProofText = signatureTimestamp
+        ? `Elektronisch signiert\n${signatureTimestamp}`
+        : "Elektronisch signiert";
+
+      const setSignatureInButtonField = (fieldName, aliases = []) => {
+        const candidateNames = [fieldName, ...aliases];
+        for (const name of candidateNames) {
+          try {
+            const buttonField = form.getButton(name);
+            buttonField.setImage(signatureImage);
+            return true;
+          } catch (error) {
+            // Try next alias/type
+          }
+        }
+        return false;
+      };
+
+      const drawSignatureIntoFieldWidget = (fieldName, aliases = []) => {
+        const candidateNames = [fieldName, ...aliases];
+        for (const name of candidateNames) {
+          try {
+            const anyField = form.getField(name);
+            const widgets = anyField.acroField?.getWidgets?.() || [];
+            for (const widget of widgets) {
+              const rect = widget.getRectangle?.();
+              const pageRef = widget.P?.();
+              if (!rect || !pageRef) continue;
+              const page = pdfDoc
+                .getPages()
+                .find(
+                  (pg) =>
+                    pg.ref?.objectNumber === pageRef.objectNumber &&
+                    pg.ref?.generationNumber === pageRef.generationNumber,
+                );
+              if (!page) continue;
+
+              const scaled = signatureImage.scale(1);
+              const targetWidth = rect.width * 0.94;
+              const targetHeight = rect.height * 0.8;
+              const drawWidth = Math.min(
+                targetWidth,
+                (scaled.width / scaled.height) * targetHeight,
+              );
+              const drawHeight = (scaled.height / scaled.width) * drawWidth;
+              // Left-align signature inside field with small padding
+              const x = rect.x + 6;
+              const y = rect.y + (rect.height - drawHeight) / 2;
+
+              page.drawImage(signatureImage, {
+                x,
+                y,
+                width: drawWidth,
+                height: drawHeight,
+              });
+
+              const proofX = x + drawWidth + 6;
+              const proofY = y + drawHeight - 7;
+              if (proofX < rect.x + rect.width - 20) {
+                page.drawText(signatureProofText, {
+                  x: proofX,
+                  y: proofY,
+                  size: 6,
+                  lineHeight: 7,
+                  font: proofFont,
+                  color: rgb(0.2, 0.2, 0.2),
+                  maxWidth: Math.max(20, rect.x + rect.width - proofX - 2),
+                });
+              }
+            }
+            return true;
+          } catch (error) {
+            // try next alias
+          }
+        }
+        return false;
+      };
+
+      const signatureAliases = [
+        "customerContractSignature ",
+        "CustomerContractSignature",
+        "Schaltfläche 8",
+      ];
+      let signatureDrawn = drawSignatureIntoFieldWidget(
+        "customerContractSignature",
+        signatureAliases,
+      );
+      if (!signatureDrawn) {
+        signatureDrawn = setSignatureInButtonField(
+          "customerContractSignature",
+          signatureAliases,
+        );
+      }
+      // Fallback for templates where signature fields are plain text
+      if (!signatureDrawn) {
+        setFieldValue("customerContractSignature", options.signatureFullName || "");
+      }
+
+      // Signatur nur in den vorgesehenen PDF-Feldern platzieren.
+    }
+
     const pdfBytes = await pdfDoc.save();
-    const fileName = `vertrag_${contractInstance.id}_${Date.now()}.pdf`;
+    const fileName = options.filePrefix
+      ? `${options.filePrefix}_${contractInstance.id}_${Date.now()}.pdf`
+      : `vertrag_${contractInstance.id}_${Date.now()}.pdf`;
     const fullPath = path.join(outputDir, fileName);
 
     fs.writeFileSync(fullPath, pdfBytes);
