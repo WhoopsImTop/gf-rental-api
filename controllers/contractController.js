@@ -35,6 +35,12 @@ function formatContractStartingDate(dateValue) {
   });
 }
 
+function addDays(date, daysToAdd) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + daysToAdd);
+  return result;
+}
+
 exports.getAllContracts = async (req, res) => {
   try {
     const contracts = await db.Contract.findAll({
@@ -328,8 +334,29 @@ exports.createContract = async (req, res) => {
 
       // 4. Update Color Variant Stock
       if (colorId) {
+        const colorToUpdate = await db.CarAboColor.findOne({
+          where: { id: colorId },
+          transaction,
+        });
+
+        const colorUpdatePayload = { isOrdered: true };
+        const hasDynamicAvailability =
+          colorToUpdate &&
+          (colorToUpdate.availableFrom == null ||
+            colorToUpdate.availableFrom === "") &&
+          Number.isInteger(colorToUpdate.availableInDays) &&
+          colorToUpdate.availableInDays >= 0;
+
+        // Freeze "Verfügbar ab" at order time for dynamic day-based colors.
+        if (hasDynamicAvailability) {
+          colorUpdatePayload.availableFrom = addDays(
+            new Date(),
+            colorToUpdate.availableInDays,
+          );
+        }
+
         await db.CarAboColor.update(
-          { isOrdered: true },
+          colorUpdatePayload,
           { where: { id: colorId }, transaction },
         );
       }
