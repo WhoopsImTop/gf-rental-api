@@ -159,6 +159,10 @@ module.exports = (sequelize, DataTypes) => {
       contractFile: {
         type: DataTypes.STRING,
       },
+      uploadedContractFile: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       signStatus: {
         type: DataTypes.ENUM(
           "not_requested",
@@ -207,6 +211,18 @@ module.exports = (sequelize, DataTypes) => {
       },
       signatureFullName: {
         type: DataTypes.STRING,
+        allowNull: true,
+      },
+      shareTokenHash: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      shareRequestedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      shareExpiresAt: {
+        type: DataTypes.DATE,
         allowNull: true,
       },
       accountHolderName: {

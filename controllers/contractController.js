@@ -14,6 +14,7 @@ const { orderAdminNotification } = require("../services/notification/order");
 const { getUserScore } = require("../services/auth/personalScore");
 
 const SIGN_LINK_VALIDITY_HOURS = 72;
+const SHARE_LINK_VALIDITY_HOURS = 168;
 const SIGNATURE_MAX_BYTES = 1024 * 1024 * 2;
 
 const hashSignToken = (token) =>
@@ -32,6 +33,11 @@ const normalizeSignToken = (token) => {
 const getPublicAppBaseUrl = () => {
   const appUrl = process.env.APPURL || "http://localhost:3002/auto-abo";
   return appUrl.endsWith("/") ? appUrl.slice(0, -1) : appUrl;
+};
+
+const getPublicApiBaseUrl = () => {
+  const apiUrl = process.env.API_URL || "http://localhost:3000/api";
+  return apiUrl.endsWith("/") ? apiUrl.slice(0, -1) : apiUrl;
 };
 
 const ensurePendingLinkState = (contract) => {
@@ -87,11 +93,59 @@ const resolveSignContractByToken = async (token) => {
 };
 
 const sendContractFileByName = (res, fileName) => {
-  const filePath = path.join(__dirname, "../internal-files/contracts", fileName);
+  const safeName = path.basename(fileName || "");
+  const filePath = path.join(__dirname, "../internal-files/contracts", safeName);
   if (!fileName || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: "Datei auf dem Server nicht gefunden." });
   }
   return res.sendFile(filePath);
+};
+
+const resolveActiveContractFileName = (contract) =>
+  contract?.uploadedContractFile ||
+  contract?.signedContractFile ||
+  contract?.contractFile ||
+  null;
+
+const canManageContract = (contract, user) =>
+  contract.userId === user.id || user.role === "ADMIN" || user.role === "SELLER";
+
+const CONTRACT_EDITABLE_FIELDS = new Set([
+  "startingDate",
+  "insurancePackage",
+  "insuranceType",
+  "insuranceCosts",
+  "insuranceDeductibleHaftpflicht",
+  "insuranceDeductibleTeilkasko",
+  "familyAndFriends",
+  "familyAndFriendsCosts",
+  "familyAndFriendsMembers",
+  "wantsDelivery",
+  "deliveryCosts",
+  "differentDeliveryAdress",
+  "deliveryStreet",
+  "deliveryHousenumber",
+  "deliveryPostalCode",
+  "deliveryCountry",
+  "deliveryNote",
+]);
+
+const normalizeContractUpdatePayload = (payload = {}) => {
+  const updates = {};
+  Object.keys(payload).forEach((key) => {
+    if (!CONTRACT_EDITABLE_FIELDS.has(key)) return;
+    updates[key] = payload[key];
+  });
+  if (typeof updates.startingDate === "string" && updates.startingDate) {
+    updates.startingDate = new Date(updates.startingDate);
+  }
+  if (
+    Array.isArray(updates.familyAndFriendsMembers) &&
+    updates.familyAndFriendsMembers.length > 20
+  ) {
+    updates.familyAndFriendsMembers = updates.familyAndFriendsMembers.slice(0, 20);
+  }
+  return updates;
 };
 
 exports.getAllContracts = async (req, res) => {
@@ -122,15 +176,60 @@ exports.getAllContracts = async (req, res) => {
       ],
     });
 
+    const mappedContracts = contracts.map((contract) => {
+      const asJson = contract.toJSON();
+      return {
+        ...asJson,
+        activeContractFile: resolveActiveContractFileName(asJson),
+      };
+    });
+
     res.status(201).json({
       message: "Contracts fetched Successfully",
-      contracts: contracts,
+      contracts: mappedContracts,
     });
   } catch (e) {
     console.error("Error creating contract:", e);
     res.status(500).json({
       message: "Internal server error",
       error: e.message,
+    });
+  }
+};
+
+exports.updateContract = async (req, res) => {
+  const id = req.params.id;
+  try {
+    const contract = await db.Contract.findByPk(id);
+    if (!contract) {
+      return res.status(404).json({ success: false, message: "Contract not found" });
+    }
+    if (!canManageContract(contract, req.user)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const updates = normalizeContractUpdatePayload(req.body);
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Keine bearbeitbaren Vertragsfelder uebermittelt.",
+      });
+    }
+
+    await contract.update(updates);
+    return res.status(200).json({
+      success: true,
+      message: "Contract updated successfully",
+      contract: {
+        ...contract.toJSON(),
+        activeContractFile: resolveActiveContractFileName(contract),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -654,12 +753,63 @@ exports.generateContract = async (req, res) => {
     // Speichere den Dateinamen zurück in die DB
     await contract.update({ contractFile: pdfFileName });
 
-    res.json({ success: true, file: pdfFileName });
+    res.json({
+      success: true,
+      file: pdfFileName,
+      activeContractFile: resolveActiveContractFileName({
+        uploadedContractFile: contract.uploadedContractFile,
+        signedContractFile: contract.signedContractFile,
+        contractFile: pdfFileName,
+      }),
+    });
   } catch (err) {
     console.log(err);
     res.status(500).json({
       error: "PDF konnte nicht erstellt werden",
       errorMessage: err,
+    });
+  }
+};
+
+exports.uploadContractFile = async (req, res) => {
+  const id = req.params.id;
+  try {
+    const contract = await db.Contract.findByPk(id);
+    if (!contract) {
+      return res.status(404).json({ success: false, message: "Contract not found" });
+    }
+    if (!canManageContract(contract, req.user)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+    if (!req.file?.filename) {
+      return res.status(400).json({
+        success: false,
+        message: "Bitte eine gueltige PDF-Datei hochladen.",
+      });
+    }
+
+    await contract.update({
+      uploadedContractFile: req.file.filename,
+      signStatus: contract.signStatus === "signed" ? "signed" : "not_requested",
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Vertragsdatei hochgeladen.",
+      contract: {
+        ...contract.toJSON(),
+        uploadedContractFile: req.file.filename,
+        activeContractFile: resolveActiveContractFileName({
+          ...contract.toJSON(),
+          uploadedContractFile: req.file.filename,
+        }),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler",
+      error: error.message,
     });
   }
 };
@@ -676,6 +826,7 @@ exports.viewContractFile = async (req, res) => {
         [db.Sequelize.Op.or]: [
           { contractFile: filename },
           { signedContractFile: filename },
+          { uploadedContractFile: filename },
         ],
       },
     });
@@ -706,21 +857,66 @@ exports.shareContractFile = async (req, res) => {
   try {
     const { accessKey } = req.params;
     const tokenHash = hashSignToken(accessKey);
-    const contract = await db.Contract.findOne({ where: { signTokenHash: tokenHash } });
+    const contract = await db.Contract.findOne({ where: { shareTokenHash: tokenHash } });
 
     if (!contract) {
       return res.status(401).json({ error: "Ungültiger Zugriffsschlüssel." });
     }
+    if (!contract.shareExpiresAt || new Date(contract.shareExpiresAt) < new Date()) {
+      return res.status(410).json({ error: "Zugriffsschluessel abgelaufen." });
+    }
 
-    const filePath = path.join(
-      __dirname,
-      "../internal-files/contracts",
-      contract.contractFile,
-    );
-    res.sendFile(filePath);
+    const activeFile = resolveActiveContractFileName(contract);
+    return sendContractFileByName(res, activeFile);
   } catch (error) {
     console.error("Download Error:", error);
     res.status(500).json({ error: "Interner Serverfehler." });
+  }
+};
+
+exports.issueContractShareLink = async (req, res) => {
+  const id = req.params.id;
+  try {
+    const contract = await db.Contract.findByPk(id, {
+      include: [{ model: db.User }],
+    });
+    if (!contract) {
+      return res.status(404).json({ success: false, message: "Contract not found" });
+    }
+    if (!canManageContract(contract, req.user)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const activeFile = resolveActiveContractFileName(contract);
+    if (!activeFile) {
+      return res.status(400).json({
+        success: false,
+        message: "Kein Vertrag vorhanden. Bitte zuerst PDF erzeugen oder Datei hochladen.",
+      });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const shareTokenHash = hashSignToken(rawToken);
+    const now = new Date();
+    const shareExpiresAt = new Date(
+      now.getTime() + SHARE_LINK_VALIDITY_HOURS * 60 * 60 * 1000,
+    );
+    await contract.update({ shareTokenHash, shareRequestedAt: now, shareExpiresAt });
+    const shareUrl = `${getPublicApiBaseUrl()}/contracts/share/${rawToken}`;
+
+    return res.status(201).json({
+      success: true,
+      message: "Freigabelink wurde erstellt.",
+      shareUrl,
+      shareExpiresAt,
+      activeContractFile: activeFile,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler",
+      error: error.message,
+    });
   }
 };
 
