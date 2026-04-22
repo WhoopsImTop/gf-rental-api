@@ -48,8 +48,13 @@ app.use("/public", cors(corsOptions), express.static("public"));
 
 // Weitere Routen und Middleware
 app.use(cors(corsOptions)); // Gilt für die anderen Routen
-app.use(bodyParser.json());
-app.use(helmet());
+app.use(bodyParser.json({ limit: "5mb" }));
+app.use(
+  helmet({
+    frameguard: false,
+    contentSecurityPolicy: false,
+  }),
+);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

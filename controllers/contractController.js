@@ -1,6 +1,7 @@
 const db = require("../models");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const { logger } = require("../services/logging");
 const {
   generateEmailHtml,
@@ -11,6 +12,131 @@ const { getGeoData } = require("../services/geoCoder");
 const { generateContractPdf } = require("../services/export/contractExport");
 const { orderAdminNotification } = require("../services/notification/order");
 const { getUserScore } = require("../services/auth/personalScore");
+
+const SIGN_LINK_VALIDITY_HOURS = 72;
+const SHARE_LINK_VALIDITY_HOURS = 168;
+const SIGNATURE_MAX_BYTES = 1024 * 1024 * 2;
+
+const hashSignToken = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
+const normalizeSignToken = (token) => {
+  if (!token || typeof token !== "string") return "";
+  let decoded = "";
+  try {
+    decoded = decodeURIComponent(token).trim();
+  } catch (error) {
+    return "";
+  }
+  const hexMatch = decoded.match(/[A-Fa-f0-9]{64}/);
+  if (hexMatch) {
+    return hexMatch[0].toLowerCase();
+  }
+  return decoded.replace(/\s/g, "");
+};
+
+const getPublicAppBaseUrl = () => {
+  const appUrl = process.env.APPURL || "http://localhost:3002/auto-abo";
+  return appUrl.endsWith("/") ? appUrl.slice(0, -1) : appUrl;
+};
+
+const getPublicApiBaseUrl = () => {
+  const apiUrl = process.env.API_URL || "http://localhost:3000/api";
+  return apiUrl.endsWith("/") ? apiUrl.slice(0, -1) : apiUrl;
+};
+
+const ensurePendingLinkState = (contract) => {
+  const now = new Date();
+  if (contract.signedAt || contract.signStatus === "signed") return "signed";
+  if (contract.signTokenUsedAt) return "used";
+  if (!contract.signTokenHash) return "missing";
+  if (!contract.signExpiresAt || contract.signExpiresAt < now) return "expired";
+  return "valid";
+};
+
+const resolveSignContractByToken = async (token) => {
+  const normalizedToken = normalizeSignToken(token);
+  if (!normalizedToken) {
+    return { reason: "invalid" };
+  }
+  const tokenHash = hashSignToken(normalizedToken);
+  const contract = await db.Contract.findOne({
+    where: { signTokenHash: tokenHash },
+    include: [
+      {
+        model: db.User,
+        include: {
+          model: db.CustomerDetails,
+          as: "customerDetails",
+        },
+      },
+      {
+        model: db.CarAbo,
+        as: "carAbo",
+      },
+      {
+        model: db.CarAboColor,
+        as: "color",
+        required: false,
+      },
+      {
+        model: db.CarAboPrice,
+        as: "price",
+        required: false,
+      },
+    ],
+  });
+
+  if (!contract) return { reason: "not_found" };
+
+  const state = ensurePendingLinkState(contract);
+  if (state === "expired" && contract.signStatus !== "expired") {
+    await contract.update({ signStatus: "expired" });
+  }
+  if (state !== "valid") return { reason: state, contract };
+  return { reason: "valid", contract, tokenHash, normalizedToken };
+};
+
+const sendContractFileByName = (res, fileName) => {
+  const safeName = path.basename(fileName || "");
+  const filePath = path.join(__dirname, "../internal-files/contracts", safeName);
+  if (!fileName || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Datei auf dem Server nicht gefunden." });
+  }
+  if (safeName.toLowerCase().endsWith(".pdf")) {
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+    res.setHeader("Cache-Control", "no-store");
+  }
+  return res.sendFile(filePath);
+};
+
+const sendSignatureFileByName = (res, fileName) => {
+  const safeName = path.basename(fileName || "");
+  const filePath = path.join(__dirname, "../internal-files/signatures", safeName);
+  if (!fileName || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Signaturdatei auf dem Server nicht gefunden." });
+  }
+  return res.sendFile(filePath);
+};
+
+const deleteContractFileIfExists = (fileName) => {
+  if (!fileName) return;
+  const safeName = path.basename(fileName);
+  const filePath = path.join(__dirname, "../internal-files/contracts", safeName);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+};
+
+const resolveActiveContractFileName = (contract) =>
+  contract?.signedContractFile ||
+  contract?.uploadedContractFile ||
+  contract?.contractFile ||
+  null;
+
+const canManageContract = (contract, user) =>
+  contract.userId === user.id || user.role === "ADMIN" || user.role === "SELLER";
 
 function formatContractStartingDate(dateValue) {
   if (!dateValue) return "-";
@@ -69,9 +195,17 @@ exports.getAllContracts = async (req, res) => {
       ],
     });
 
+    const mappedContracts = contracts.map((contract) => {
+      const asJson = contract.toJSON();
+      return {
+        ...asJson,
+        activeContractFile: resolveActiveContractFileName(asJson),
+      };
+    });
+
     res.status(201).json({
       message: "Contracts fetched Successfully",
-      contracts: contracts,
+      contracts: mappedContracts,
     });
   } catch (e) {
     console.error("Error creating contract:", e);
@@ -94,6 +228,16 @@ exports.createContract = async (req, res) => {
   } = req.body;
 
   try {
+    if (!customerDetails || typeof customerDetails !== "object") {
+      throw new Error("MISSING_CUSTOMER_DETAILS");
+    }
+    if (!contractData || typeof contractData !== "object") {
+      throw new Error("MISSING_CONTRACT_DATA");
+    }
+    if (!paymentData || typeof paymentData !== "object") {
+      throw new Error("MISSING_PAYMENT_DATA");
+    }
+
     const result = await db.sequelize.transaction(async (transaction) => {
       if (!userId) {
         logger(
@@ -113,8 +257,8 @@ exports.createContract = async (req, res) => {
       });
 
       //Make licenseIssuedOn and licenseValidUntil ISO date
-      const licenseIssuedOn = new Date(customerDetails.licenseIssuedOn);
-      const licenseValidUntil = new Date(customerDetails.licenseValidUntil);
+      const licenseIssuedOn = customerDetails.licenseIssuedOn ? new Date(customerDetails.licenseIssuedOn) : null;
+      const licenseValidUntil = customerDetails.licenseValidUntil ? new Date(customerDetails.licenseValidUntil) : null;
 
       const detailsPayload = {
         userId,
@@ -199,6 +343,9 @@ exports.createContract = async (req, res) => {
       if (!Cart.syncedByCantamen) {
         // check if personal score of user is matching the score in the settings
         const settings = await db.Setting.findOne();
+        if (!settings || settings.allowedScore == null) {
+          throw new Error("SETTINGS_ALLOWED_SCORE_MISSING");
+        }
         userScore = await getUserScore(
           customerDetails.firstName,
           customerDetails.lastName,
@@ -261,6 +408,9 @@ exports.createContract = async (req, res) => {
         validDurationType === "minimum"
           ? parseFloat(selectedPrice.priceMinimumDuration)
           : parseFloat(selectedPrice.priceFixedDuration);
+      if (!Number.isFinite(basePrice) || !Number.isFinite(Number(duration)) || Number(duration) <= 0) {
+        throw new Error("PRICE_CONFIGURATION_INVALID");
+      }
       const depVal = parseFloat(Cart.depositValue) || 0;
       let monthlyPrice = basePrice;
       if (depVal > 0) {
@@ -300,8 +450,8 @@ exports.createContract = async (req, res) => {
           deliveryCountry: contractData.deliveryCountry || null,
           deliveryNote: contractData.deliveryNote || null,
           // Payment
-          accountHolderName: paymentData.accountHolderName,
-          iban: paymentData.iban,
+          accountHolderName: paymentData.accountHolderName || null,
+          iban: paymentData.iban || null,
           sepaMandate: paymentData.sepaMandate || false,
           mandateReference: paymentData.mandateReference || null,
           sepaMandateDate: paymentData.sepaMandate ? new Date() : null,
@@ -399,10 +549,14 @@ exports.createContract = async (req, res) => {
       if (!user) {
         throw new Error("User for email notification not found");
       }
+      if (!user.customerDetails) {
+        throw new Error("USER_DETAILS_MISSING_FOR_EMAIL");
+      }
+      const previewImageUrl = autoAbo?.colors?.[0]?.media?.url || "";
 
       const emailContent = `
-<img src="${autoAbo.colors[0].media.url}" width="100%" height="auto"/>
-<p>Guten Tag Herr ${user.lastName + "," ?? ""}</p>
+${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>` : ""}
+<p>Guten Tag ${user.firstName} ${user.lastName + "," ?? ""}</p>
       <p>Hiermit bestätigen wir Ihr Abo Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Ihre Daten</h2>
@@ -523,6 +677,27 @@ exports.createContract = async (req, res) => {
         message: "Warenkorb nicht gefunden. Bitte starte die Buchung erneut.",
       });
     }
+    if (
+      error.message === "MISSING_CUSTOMER_DETAILS" ||
+      error.message === "MISSING_CONTRACT_DATA" ||
+      error.message === "MISSING_PAYMENT_DATA"
+    ) {
+      return res.status(400).json({
+        message: "Unvollstaendige Bestelldaten. Bitte pruefe die Eingaben.",
+      });
+    }
+    if (error.message === "SETTINGS_ALLOWED_SCORE_MISSING") {
+      return res.status(500).json({
+        message:
+          "Bonitaetspruefung ist nicht konfiguriert. Bitte Support kontaktieren.",
+      });
+    }
+    if (error.message === "USER_DETAILS_MISSING_FOR_EMAIL") {
+      return res.status(500).json({
+        message:
+          "Kundendaten fuer die Bestellbestaetigung fehlen. Bitte Support kontaktieren.",
+      });
+    }
     if (error.message === "PRICE_CONFIGURATION_INVALID") {
       return res.status(400).json({
         message:
@@ -615,12 +790,98 @@ exports.generateContract = async (req, res) => {
     // Speichere den Dateinamen zurück in die DB
     await contract.update({ contractFile: pdfFileName });
 
-    res.json({ success: true, file: pdfFileName });
+    res.json({
+      success: true,
+      file: pdfFileName,
+      activeContractFile: resolveActiveContractFileName({
+        uploadedContractFile: contract.uploadedContractFile,
+        signedContractFile: contract.signedContractFile,
+        contractFile: pdfFileName,
+      }),
+    });
   } catch (err) {
     console.log(err);
     res.status(500).json({
       error: "PDF konnte nicht erstellt werden",
       errorMessage: err,
+    });
+  }
+};
+
+exports.uploadContractFile = async (req, res) => {
+  const id = req.params.id;
+  try {
+    const contract = await db.Contract.findByPk(id);
+    if (!contract) {
+      return res.status(404).json({ success: false, message: "Contract not found" });
+    }
+    if (!canManageContract(contract, req.user)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+    if (!req.file?.filename) {
+      return res.status(400).json({
+        success: false,
+        message: "Bitte eine gueltige PDF-Datei hochladen.",
+      });
+    }
+
+    const newFileName = req.file.filename;
+    const oldGeneratedFile = contract.contractFile;
+    const oldUploadedFile = contract.uploadedContractFile;
+    const oldSignedFile = contract.signedContractFile;
+
+    await contract.update({
+      contractFile: newFileName,
+      uploadedContractFile: newFileName,
+      signedContractFile: null,
+      signStatus: "not_requested",
+      signTokenHash: null,
+      signRequestedAt: null,
+      signExpiresAt: null,
+      signTokenUsedAt: null,
+      signedAt: null,
+      signatureImagePath: null,
+      signatureIp: null,
+      signatureUserAgent: null,
+      signatureFullName: null,
+    });
+
+    if (oldGeneratedFile && oldGeneratedFile !== newFileName) {
+      deleteContractFileIfExists(oldGeneratedFile);
+    }
+    if (
+      oldUploadedFile &&
+      oldUploadedFile !== newFileName &&
+      oldUploadedFile !== oldGeneratedFile
+    ) {
+      deleteContractFileIfExists(oldUploadedFile);
+    }
+    if (
+      oldSignedFile &&
+      oldSignedFile !== newFileName &&
+      oldSignedFile !== oldGeneratedFile &&
+      oldSignedFile !== oldUploadedFile
+    ) {
+      deleteContractFileIfExists(oldSignedFile);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Vertragsdatei hochgeladen.",
+      contract: {
+        ...contract.toJSON(),
+        uploadedContractFile: req.file.filename,
+        activeContractFile: resolveActiveContractFileName({
+          ...contract.toJSON(),
+          uploadedContractFile: req.file.filename,
+        }),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler",
+      error: error.message,
     });
   }
 };
@@ -633,7 +894,13 @@ exports.viewContractFile = async (req, res) => {
     console.log(filename, userId, userRole);
     // 1. DB-Check: Gehört die Datei dem User? (Schutz gegen IDOR)
     const contract = await db.Contract.findOne({
-      where: { contractFile: filename },
+      where: {
+        [db.Sequelize.Op.or]: [
+          { contractFile: filename },
+          { signedContractFile: filename },
+          { uploadedContractFile: filename },
+        ],
+      },
     });
 
     if (!contract) {
@@ -650,45 +917,381 @@ exports.viewContractFile = async (req, res) => {
     }
 
     // 2. Pfad zur Datei (außerhalb des public-Ordners)
-    const filePath = path.join(
-      __dirname,
-      "../internal-files/contracts",
-      filename,
-    );
-
-    if (!fs.existsSync(filePath)) {
-      return res
-        .status(404)
-        .json({ error: "Datei auf dem Server nicht gefunden." });
-    }
-
-    // 3. Datei sicher senden
-    res.sendFile(filePath);
+    // 2. Datei sicher senden
+    return sendContractFileByName(res, filename);
   } catch (error) {
     console.error("Download Error:", error);
     res.status(500).json({ error: "Interner Serverfehler." });
   }
 };
 
+exports.viewSignatureFile = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const contract = await db.Contract.findOne({
+      where: { signatureImagePath: filename },
+    });
+
+    if (!contract) {
+      return res.status(404).json({ error: "Signatur nicht gefunden." });
+    }
+
+    if (
+      contract.userId !== userId &&
+      userRole !== "ADMIN" &&
+      userRole !== "SELLER"
+    ) {
+      return res.status(403).json({ error: "Zugriff verweigert." });
+    }
+
+    return sendSignatureFileByName(res, filename);
+  } catch (error) {
+    console.error("Signature view error:", error);
+    return res.status(500).json({ error: "Interner Serverfehler." });
+  }
+};
+
 exports.shareContractFile = async (req, res) => {
   try {
     const { accessKey } = req.params;
-
-    const contract = await db.Contract.findOne({ where: { accessKey } });
+    const tokenHash = hashSignToken(accessKey);
+    const contract = await db.Contract.findOne({ where: { shareTokenHash: tokenHash } });
 
     if (!contract) {
       return res.status(401).json({ error: "Ungültiger Zugriffsschlüssel." });
     }
+    if (!contract.shareExpiresAt || new Date(contract.shareExpiresAt) < new Date()) {
+      return res.status(410).json({ error: "Zugriffsschluessel abgelaufen." });
+    }
 
-    const filePath = path.join(
-      __dirname,
-      "../internal-files/contracts",
-      contract.contractFile,
-    );
-    res.sendFile(filePath);
+    const activeFile = resolveActiveContractFileName(contract);
+    return sendContractFileByName(res, activeFile);
   } catch (error) {
     console.error("Download Error:", error);
     res.status(500).json({ error: "Interner Serverfehler." });
+  }
+};
+
+exports.issueContractShareLink = async (req, res) => {
+  const id = req.params.id;
+  try {
+    const contract = await db.Contract.findByPk(id, {
+      include: [{ model: db.User }],
+    });
+    if (!contract) {
+      return res.status(404).json({ success: false, message: "Contract not found" });
+    }
+    if (!canManageContract(contract, req.user)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const activeFile = resolveActiveContractFileName(contract);
+    if (!activeFile) {
+      return res.status(400).json({
+        success: false,
+        message: "Kein Vertrag vorhanden. Bitte zuerst PDF erzeugen oder Datei hochladen.",
+      });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const shareTokenHash = hashSignToken(rawToken);
+    const now = new Date();
+    const shareExpiresAt = new Date(
+      now.getTime() + SHARE_LINK_VALIDITY_HOURS * 60 * 60 * 1000,
+    );
+    await contract.update({ shareTokenHash, shareRequestedAt: now, shareExpiresAt });
+    const shareUrl = `${getPublicApiBaseUrl()}/contracts/share/${rawToken}`;
+
+    return res.status(201).json({
+      success: true,
+      message: "Freigabelink wurde erstellt.",
+      shareUrl,
+      shareExpiresAt,
+      activeContractFile: activeFile,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler",
+      error: error.message,
+    });
+  }
+};
+
+exports.issueContractSignLink = async (req, res) => {
+  const id = req.params.id;
+  try {
+    const contract = await db.Contract.findByPk(id, {
+      include: [
+        {
+          model: db.User,
+          include: { model: db.CustomerDetails, as: "customerDetails" },
+        },
+        { model: db.CarAbo, as: "carAbo" },
+        { model: db.CarAboColor, as: "color", required: false },
+        { model: db.CarAboPrice, as: "price", required: false },
+      ],
+    });
+
+    if (!contract) {
+      return res.status(404).json({ success: false, message: "Contract not found" });
+    }
+    if (
+      contract.userId !== req.user.id &&
+      req.user.role !== "ADMIN" &&
+      req.user.role !== "SELLER"
+    ) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    let contractFile = resolveActiveContractFileName(contract);
+    if (!contractFile) {
+      contractFile = await generateContractPdf(contract);
+      await contract.update({ contractFile });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const signTokenHash = hashSignToken(rawToken);
+    const now = new Date();
+    const signExpiresAt = new Date(
+      now.getTime() + SIGN_LINK_VALIDITY_HOURS * 60 * 60 * 1000,
+    );
+    const signingUrl = `${getPublicAppBaseUrl()}/sign/${rawToken}`;
+
+    await contract.update({
+      signStatus: "pending_signature",
+      signTokenHash,
+      signRequestedAt: now,
+      signExpiresAt,
+      signTokenUsedAt: null,
+      signedAt: null,
+      signatureImagePath: null,
+      signedContractFile: null,
+      signatureIp: null,
+      signatureUserAgent: null,
+      signatureFullName: null,
+    });
+
+    const customerFirstName = contract.User?.firstName || "";
+    const carName = contract.carAbo?.displayName || "Ihr Fahrzeug";
+    const expiryDate = signExpiresAt.toLocaleString("de-DE");
+    const mailBody = `
+      <p>Hallo ${customerFirstName},</p>
+      <p>Ihr Vertrag für <strong>${carName}</strong> ist zur digitalen Unterschrift bereit.</p>
+      <p>Bitte öffnen Sie den folgenden Link und unterschreiben Sie den Vertrag direkt im Browser:</p>
+      <p><a href="${signingUrl}" style="display: inline-block; background-color: #82ba26; padding: 10px 14px; border-radius: 10px; color: #ffffff; text-decoration: none; font-weight: 700;">Vertrag jetzt unterschreiben</a></p>
+      <p>Oder kopieren Sie diesen Link in Ihren Browser:<br><a href="${signingUrl}">${signingUrl}</a></p>
+      <p>Der Link ist einmalig nutzbar und bis <strong>${expiryDate}</strong> gültig.</p>
+      <p>Viele Grüße<br><strong>Ihr Grüne Flotte Team</strong></p>
+    `;
+    const generatedEmailContent = await generateEmailHtml(
+      "Vertrag digital unterschreiben",
+      mailBody,
+    );
+    if (!contract.User?.email) {
+      return res.status(422).json({
+        success: false,
+        message: "Kunden-E-Mail fehlt. Signaturlink konnte nicht versendet werden.",
+      });
+    }
+    await sendNotificationEmail(
+      contract.User.email,
+      null,
+      "Ihre digitale Vertragsunterschrift - Gruene Flotte",
+      generatedEmailContent,
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Signaturlink wurde versendet",
+      signStatus: "pending_signature",
+      signExpiresAt,
+      signingUrl,
+    });
+  } catch (error) {
+    console.error("Issue sign link error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler",
+      error: error.message,
+    });
+  }
+};
+
+exports.getSignContractByToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const resolved = await resolveSignContractByToken(token);
+    if (!resolved.contract) {
+      return res.status(404).json({
+        success: false,
+        reason: resolved.reason || "invalid",
+        message: "Ungueltiger Signaturlink.",
+      });
+    }
+    if (resolved.reason && resolved.reason !== "valid") {
+      const statusMap = {
+        expired: 410,
+        used: 410,
+        signed: 410,
+      };
+      return res.status(statusMap[resolved.reason] || 400).json({
+        success: false,
+        reason: resolved.reason,
+        message:
+          resolved.reason === "expired"
+            ? "Signaturlink ist abgelaufen."
+            : resolved.reason === "signed"
+              ? "Vertrag wurde bereits signiert."
+              : "Signaturlink wurde bereits verwendet.",
+      });
+    }
+
+    const contract = resolved.contract;
+    return res.status(200).json({
+      success: true,
+      contract: {
+        id: contract.id,
+        customerName: `${contract.User?.firstName || ""} ${contract.User?.lastName || ""}`.trim(),
+        customerEmail: contract.User?.email || "",
+        carName: contract.carAbo?.displayName || "",
+        monthlyPrice: contract.monthlyPrice,
+        duration: contract.duration,
+        startingDate: contract.startingDate,
+        signExpiresAt: contract.signExpiresAt,
+        previewUrl: `/contracts/sign/public/${encodeURIComponent(
+          resolved.normalizedToken,
+        )}/preview`,
+      },
+    });
+  } catch (error) {
+    console.error("Get sign contract error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler",
+      error: error.message,
+    });
+  }
+};
+
+exports.getSignContractPreviewByToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const resolved = await resolveSignContractByToken(token);
+    if (!resolved.contract) {
+      return res.status(410).json({
+        success: false,
+        reason: resolved.reason || "invalid",
+        message: "Signaturlink ist ungueltig, abgelaufen oder bereits genutzt.",
+      });
+    }
+    if (resolved.reason && resolved.reason !== "valid" && resolved.reason !== "signed") {
+      return res.status(410).json({
+        success: false,
+        reason: resolved.reason || "invalid",
+        message: "Signaturlink ist ungueltig, abgelaufen oder bereits genutzt.",
+      });
+    }
+    const activeFile = resolveActiveContractFileName(resolved.contract);
+    if (!activeFile) {
+      const generatedFile = await generateContractPdf(resolved.contract);
+      await resolved.contract.update({ contractFile: generatedFile });
+      return sendContractFileByName(res, generatedFile);
+    }
+    return sendContractFileByName(res, activeFile);
+  } catch (error) {
+    console.error("Get sign contract preview error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler",
+      error: error.message,
+    });
+  }
+};
+
+exports.submitContractSignature = async (req, res) => {
+  const { token } = req.params;
+  const { signatureDataUrl, fullName, acceptTerms, acceptPrivacy } = req.body || {};
+
+  if (!signatureDataUrl || typeof signatureDataUrl !== "string") {
+    return res.status(400).json({ success: false, message: "Signatur fehlt." });
+  }
+  if (!fullName || typeof fullName !== "string") {
+    return res.status(400).json({ success: false, message: "Vollstaendiger Name fehlt." });
+  }
+  if (!acceptTerms || !acceptPrivacy) {
+    return res.status(400).json({ success: false, message: "Pflichtbestaetigungen fehlen." });
+  }
+  const match = signatureDataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) {
+    return res.status(400).json({ success: false, message: "Signaturformat ungueltig." });
+  }
+  const signatureBuffer = Buffer.from(match[1], "base64");
+  if (!signatureBuffer.length || signatureBuffer.length > SIGNATURE_MAX_BYTES) {
+    return res.status(400).json({ success: false, message: "Signatur ist leer oder zu gross." });
+  }
+
+  try {
+    const resolved = await resolveSignContractByToken(token);
+    if (!resolved.contract || resolved.reason !== "valid") {
+      return res.status(410).json({
+        success: false,
+        reason: resolved.reason || "invalid",
+        message: "Signaturlink ist ungueltig, abgelaufen oder bereits genutzt.",
+      });
+    }
+
+    const clientIp =
+      req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      null;
+    const userAgent = req.headers["user-agent"] || null;
+    const signedAt = new Date();
+    const signaturesDir = path.join(__dirname, "../internal-files/signatures");
+    await fs.promises.mkdir(signaturesDir, { recursive: true });
+    const signatureFileName = `signature_${resolved.contract.id}_${Date.now()}.png`;
+    const signaturePath = path.join(signaturesDir, signatureFileName);
+    await fs.promises.writeFile(signaturePath, signatureBuffer);
+
+    const sourceFileName = resolveActiveContractFileName(resolved.contract);
+    const signedContractFile = await generateContractPdf(resolved.contract, {
+      signatureImageBuffer: signatureBuffer,
+      signedAt,
+      signatureFullName: fullName.trim(),
+      signatureIp: clientIp,
+      filePrefix: "vertrag_signiert",
+      sourceFileName,
+    });
+
+    await resolved.contract.update({
+      signStatus: "signed",
+      signTokenUsedAt: signedAt,
+      signedAt,
+      signatureImagePath: signatureFileName,
+      signedContractFile,
+      signatureIp: clientIp,
+      signatureUserAgent: userAgent,
+      signatureFullName: fullName.trim(),
+      signTokenHash: resolved.tokenHash || resolved.contract.signTokenHash,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Vertrag erfolgreich signiert.",
+      signedPreviewUrl: `/contracts/sign/public/${encodeURIComponent(
+        resolved.normalizedToken,
+      )}/preview`,
+    });
+  } catch (error) {
+    console.error("Submit signature error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler",
+      error: error.message,
+    });
   }
 };
 
