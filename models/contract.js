@@ -252,6 +252,17 @@ module.exports = (sequelize, DataTypes) => {
       sepaMandateDate: {
         type: DataTypes.DATE,
       },
+      mandateReference: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        set(value) {
+          this.setDataValue("mandateReference", value ? encrypt(value) : null);
+        },
+        get() {
+          const value = this.getDataValue("mandateReference");
+          return value ? decrypt(value) : null;
+        },
+      },
       score: {
         type: DataTypes.TEXT,
         set(value) {

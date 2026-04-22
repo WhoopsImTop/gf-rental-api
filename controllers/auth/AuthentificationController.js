@@ -12,6 +12,12 @@ const {
 } = require("../../services/auth/cantamen");
 const { VerificationCode, PasswordResetCode } = require("../../models");
 
+function extractIsoDate(value) {
+  if (!value) return null;
+  const match = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
 exports.registerUser = async (req, res) => {
   const { firstName, lastName, email, phone, password, role } = req.body;
 
@@ -435,7 +441,8 @@ exports.cantamenAuth = async (req, res) => {
     }
 
     const authData = await authentificateWithCantamen(email, password);
-    const { userData, sepaMandate } = await collectUserDataFromCantamen(
+    const { userData, sepaMandate, sepaMandateReference, sepaAccount } =
+      await collectUserDataFromCantamen(
       authData.id
     );
 
@@ -477,9 +484,7 @@ exports.cantamenAuth = async (req, res) => {
         email: user.email,
         phone: user.phone,
         role: user.role,
-        birthday: userData.birthDate
-          ? new Date(userData.birthDate).toISOString().split("T")[0]
-          : null, // Ensure YYYY-MM-DD
+        birthday: extractIsoDate(userData.birthDate),
         birthPlace: userData.birthPlace,
         street: userData.address?.street,
         housenumber: userData.address?.streetNr,
@@ -487,12 +492,17 @@ exports.cantamenAuth = async (req, res) => {
         city: userData.address?.city,
         country: userData.address?.country,
         driversLicenseNumber: userData.driverlicenseNumber,
-        driversLicenseIssued: userData.driverlicenseIssued,
+        driversLicenseIssued: extractIsoDate(userData.driverlicenseIssued),
         driversLicenseIssuingPlace: userData.driverlicenseIssuedPlace,
-        driversLicenseValidUntil: userData.driverlicenseValidUntil,
+        driversLicenseValidUntil: extractIsoDate(
+          userData.driverlicenseValidUntil,
+        ),
         driversLicenseClassesAllowed: userData.driverlicenseClassesAllowed,
         IdCardNumber: userData.identityNumber,
         hasCantamenSepa: sepaMandate,
+        iban: sepaAccount?.iban || null,
+        accountHolderName: sepaAccount?.accountHolder || null,
+        sepaMandateReference: sepaMandateReference || null,
       },
     });
   } catch (e) {

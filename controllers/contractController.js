@@ -22,7 +22,12 @@ const hashSignToken = (token) =>
 
 const normalizeSignToken = (token) => {
   if (!token || typeof token !== "string") return "";
-  const decoded = decodeURIComponent(token).trim();
+  let decoded = "";
+  try {
+    decoded = decodeURIComponent(token).trim();
+  } catch (error) {
+    return "";
+  }
   const hexMatch = decoded.match(/[A-Fa-f0-9]{64}/);
   if (hexMatch) {
     return hexMatch[0].toLowerCase();
@@ -98,55 +103,69 @@ const sendContractFileByName = (res, fileName) => {
   if (!fileName || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: "Datei auf dem Server nicht gefunden." });
   }
+  if (safeName.toLowerCase().endsWith(".pdf")) {
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+    res.setHeader("Cache-Control", "no-store");
+  }
   return res.sendFile(filePath);
 };
 
+const sendSignatureFileByName = (res, fileName) => {
+  const safeName = path.basename(fileName || "");
+  const filePath = path.join(__dirname, "../internal-files/signatures", safeName);
+  if (!fileName || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Signaturdatei auf dem Server nicht gefunden." });
+  }
+  return res.sendFile(filePath);
+};
+
+const deleteContractFileIfExists = (fileName) => {
+  if (!fileName) return;
+  const safeName = path.basename(fileName);
+  const filePath = path.join(__dirname, "../internal-files/contracts", safeName);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+};
+
 const resolveActiveContractFileName = (contract) =>
-  contract?.uploadedContractFile ||
   contract?.signedContractFile ||
+  contract?.uploadedContractFile ||
   contract?.contractFile ||
   null;
 
 const canManageContract = (contract, user) =>
   contract.userId === user.id || user.role === "ADMIN" || user.role === "SELLER";
 
-const CONTRACT_EDITABLE_FIELDS = new Set([
-  "startingDate",
-  "insurancePackage",
-  "insuranceType",
-  "insuranceCosts",
-  "insuranceDeductibleHaftpflicht",
-  "insuranceDeductibleTeilkasko",
-  "familyAndFriends",
-  "familyAndFriendsCosts",
-  "familyAndFriendsMembers",
-  "wantsDelivery",
-  "deliveryCosts",
-  "differentDeliveryAdress",
-  "deliveryStreet",
-  "deliveryHousenumber",
-  "deliveryPostalCode",
-  "deliveryCountry",
-  "deliveryNote",
-]);
+function formatContractStartingDate(dateValue) {
+  if (!dateValue) return "-";
 
-const normalizeContractUpdatePayload = (payload = {}) => {
-  const updates = {};
-  Object.keys(payload).forEach((key) => {
-    if (!CONTRACT_EDITABLE_FIELDS.has(key)) return;
-    updates[key] = payload[key];
+  const value = String(dateValue).trim();
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  let date;
+
+  if (match) {
+    const [, year, month, day] = match;
+    date = new Date(Number(year), Number(month) - 1, Number(day));
+  } else {
+    date = new Date(value);
+  }
+
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("de-DE", {
+    day: "numeric",
+    month: "long",
+    year: "2-digit",
   });
-  if (typeof updates.startingDate === "string" && updates.startingDate) {
-    updates.startingDate = new Date(updates.startingDate);
-  }
-  if (
-    Array.isArray(updates.familyAndFriendsMembers) &&
-    updates.familyAndFriendsMembers.length > 20
-  ) {
-    updates.familyAndFriendsMembers = updates.familyAndFriendsMembers.slice(0, 20);
-  }
-  return updates;
-};
+}
+
+function addDays(date, daysToAdd) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + daysToAdd);
+  return result;
+}
 
 exports.getAllContracts = async (req, res) => {
   try {
@@ -197,43 +216,6 @@ exports.getAllContracts = async (req, res) => {
   }
 };
 
-exports.updateContract = async (req, res) => {
-  const id = req.params.id;
-  try {
-    const contract = await db.Contract.findByPk(id);
-    if (!contract) {
-      return res.status(404).json({ success: false, message: "Contract not found" });
-    }
-    if (!canManageContract(contract, req.user)) {
-      return res.status(403).json({ success: false, message: "Access denied" });
-    }
-
-    const updates = normalizeContractUpdatePayload(req.body);
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Keine bearbeitbaren Vertragsfelder uebermittelt.",
-      });
-    }
-
-    await contract.update(updates);
-    return res.status(200).json({
-      success: true,
-      message: "Contract updated successfully",
-      contract: {
-        ...contract.toJSON(),
-        activeContractFile: resolveActiveContractFileName(contract),
-      },
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-};
-
 exports.createContract = async (req, res) => {
   let {
     carAboId,
@@ -246,6 +228,16 @@ exports.createContract = async (req, res) => {
   } = req.body;
 
   try {
+    if (!customerDetails || typeof customerDetails !== "object") {
+      throw new Error("MISSING_CUSTOMER_DETAILS");
+    }
+    if (!contractData || typeof contractData !== "object") {
+      throw new Error("MISSING_CONTRACT_DATA");
+    }
+    if (!paymentData || typeof paymentData !== "object") {
+      throw new Error("MISSING_PAYMENT_DATA");
+    }
+
     const result = await db.sequelize.transaction(async (transaction) => {
       if (!userId) {
         logger(
@@ -265,8 +257,8 @@ exports.createContract = async (req, res) => {
       });
 
       //Make licenseIssuedOn and licenseValidUntil ISO date
-      const licenseIssuedOn = new Date(customerDetails.licenseIssuedOn);
-      const licenseValidUntil = new Date(customerDetails.licenseValidUntil);
+      const licenseIssuedOn = customerDetails.licenseIssuedOn ? new Date(customerDetails.licenseIssuedOn) : null;
+      const licenseValidUntil = customerDetails.licenseValidUntil ? new Date(customerDetails.licenseValidUntil) : null;
 
       const detailsPayload = {
         userId,
@@ -351,6 +343,9 @@ exports.createContract = async (req, res) => {
       if (!Cart.syncedByCantamen) {
         // check if personal score of user is matching the score in the settings
         const settings = await db.Setting.findOne();
+        if (!settings || settings.allowedScore == null) {
+          throw new Error("SETTINGS_ALLOWED_SCORE_MISSING");
+        }
         userScore = await getUserScore(
           customerDetails.firstName,
           customerDetails.lastName,
@@ -413,6 +408,9 @@ exports.createContract = async (req, res) => {
         validDurationType === "minimum"
           ? parseFloat(selectedPrice.priceMinimumDuration)
           : parseFloat(selectedPrice.priceFixedDuration);
+      if (!Number.isFinite(basePrice) || !Number.isFinite(Number(duration)) || Number(duration) <= 0) {
+        throw new Error("PRICE_CONFIGURATION_INVALID");
+      }
       const depVal = parseFloat(Cart.depositValue) || 0;
       let monthlyPrice = basePrice;
       if (depVal > 0) {
@@ -452,9 +450,10 @@ exports.createContract = async (req, res) => {
           deliveryCountry: contractData.deliveryCountry || null,
           deliveryNote: contractData.deliveryNote || null,
           // Payment
-          accountHolderName: paymentData.accountHolderName,
-          iban: paymentData.iban,
+          accountHolderName: paymentData.accountHolderName || null,
+          iban: paymentData.iban || null,
           sepaMandate: paymentData.sepaMandate || false,
+          mandateReference: paymentData.mandateReference || null,
           sepaMandateDate: paymentData.sepaMandate ? new Date() : null,
           score: paymentData.score || null,
           // Status
@@ -486,8 +485,29 @@ exports.createContract = async (req, res) => {
 
       // 4. Update Color Variant Stock
       if (colorId) {
+        const colorToUpdate = await db.CarAboColor.findOne({
+          where: { id: colorId },
+          transaction,
+        });
+
+        const colorUpdatePayload = { isOrdered: true };
+        const hasDynamicAvailability =
+          colorToUpdate &&
+          (colorToUpdate.availableFrom == null ||
+            colorToUpdate.availableFrom === "") &&
+          Number.isInteger(colorToUpdate.availableInDays) &&
+          colorToUpdate.availableInDays >= 0;
+
+        // Freeze "Verfügbar ab" at order time for dynamic day-based colors.
+        if (hasDynamicAvailability) {
+          colorUpdatePayload.availableFrom = addDays(
+            new Date(),
+            colorToUpdate.availableInDays,
+          );
+        }
+
         await db.CarAboColor.update(
-          { isOrdered: true },
+          colorUpdatePayload,
           { where: { id: colorId }, transaction },
         );
       }
@@ -529,10 +549,14 @@ exports.createContract = async (req, res) => {
       if (!user) {
         throw new Error("User for email notification not found");
       }
+      if (!user.customerDetails) {
+        throw new Error("USER_DETAILS_MISSING_FOR_EMAIL");
+      }
+      const previewImageUrl = autoAbo?.colors?.[0]?.media?.url || "";
 
       const emailContent = `
-<img src="${autoAbo.colors[0].media.url}" width="100%" height="auto"/>
-<p>Guten Tag Herr ${user.lastName + "," ?? ""}</p>
+${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>` : ""}
+<p>Guten Tag ${user.firstName} ${user.lastName + "," ?? ""}</p>
       <p>Hiermit bestätigen wir Ihr Abo Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Ihre Daten</h2>
@@ -547,15 +571,7 @@ exports.createContract = async (req, res) => {
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.city}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Telefon</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.phone}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Email</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.email}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            contract.startingDate
-              ? new Date(contract.startingDate).toLocaleDateString("de-DE", {
-                  day: "numeric",
-                  month: "long",
-                  year: "2-digit",
-                })
-              : "-"
-          }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${formatContractStartingDate(contract.startingDate)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Sicherheitspaket</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
             contract.insuranceType === "premium"
               ? "Premium"
@@ -659,6 +675,27 @@ exports.createContract = async (req, res) => {
     if (error.message === "CART_NOT_FOUND") {
       return res.status(400).json({
         message: "Warenkorb nicht gefunden. Bitte starte die Buchung erneut.",
+      });
+    }
+    if (
+      error.message === "MISSING_CUSTOMER_DETAILS" ||
+      error.message === "MISSING_CONTRACT_DATA" ||
+      error.message === "MISSING_PAYMENT_DATA"
+    ) {
+      return res.status(400).json({
+        message: "Unvollstaendige Bestelldaten. Bitte pruefe die Eingaben.",
+      });
+    }
+    if (error.message === "SETTINGS_ALLOWED_SCORE_MISSING") {
+      return res.status(500).json({
+        message:
+          "Bonitaetspruefung ist nicht konfiguriert. Bitte Support kontaktieren.",
+      });
+    }
+    if (error.message === "USER_DETAILS_MISSING_FOR_EMAIL") {
+      return res.status(500).json({
+        message:
+          "Kundendaten fuer die Bestellbestaetigung fehlen. Bitte Support kontaktieren.",
       });
     }
     if (error.message === "PRICE_CONFIGURATION_INVALID") {
@@ -788,10 +825,45 @@ exports.uploadContractFile = async (req, res) => {
       });
     }
 
+    const newFileName = req.file.filename;
+    const oldGeneratedFile = contract.contractFile;
+    const oldUploadedFile = contract.uploadedContractFile;
+    const oldSignedFile = contract.signedContractFile;
+
     await contract.update({
-      uploadedContractFile: req.file.filename,
-      signStatus: contract.signStatus === "signed" ? "signed" : "not_requested",
+      contractFile: newFileName,
+      uploadedContractFile: newFileName,
+      signedContractFile: null,
+      signStatus: "not_requested",
+      signTokenHash: null,
+      signRequestedAt: null,
+      signExpiresAt: null,
+      signTokenUsedAt: null,
+      signedAt: null,
+      signatureImagePath: null,
+      signatureIp: null,
+      signatureUserAgent: null,
+      signatureFullName: null,
     });
+
+    if (oldGeneratedFile && oldGeneratedFile !== newFileName) {
+      deleteContractFileIfExists(oldGeneratedFile);
+    }
+    if (
+      oldUploadedFile &&
+      oldUploadedFile !== newFileName &&
+      oldUploadedFile !== oldGeneratedFile
+    ) {
+      deleteContractFileIfExists(oldUploadedFile);
+    }
+    if (
+      oldSignedFile &&
+      oldSignedFile !== newFileName &&
+      oldSignedFile !== oldGeneratedFile &&
+      oldSignedFile !== oldUploadedFile
+    ) {
+      deleteContractFileIfExists(oldSignedFile);
+    }
 
     return res.status(201).json({
       success: true,
@@ -850,6 +922,35 @@ exports.viewContractFile = async (req, res) => {
   } catch (error) {
     console.error("Download Error:", error);
     res.status(500).json({ error: "Interner Serverfehler." });
+  }
+};
+
+exports.viewSignatureFile = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const contract = await db.Contract.findOne({
+      where: { signatureImagePath: filename },
+    });
+
+    if (!contract) {
+      return res.status(404).json({ error: "Signatur nicht gefunden." });
+    }
+
+    if (
+      contract.userId !== userId &&
+      userRole !== "ADMIN" &&
+      userRole !== "SELLER"
+    ) {
+      return res.status(403).json({ error: "Zugriff verweigert." });
+    }
+
+    return sendSignatureFileByName(res, filename);
+  } catch (error) {
+    console.error("Signature view error:", error);
+    return res.status(500).json({ error: "Interner Serverfehler." });
   }
 };
 
@@ -946,7 +1047,7 @@ exports.issueContractSignLink = async (req, res) => {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
-    let contractFile = contract.contractFile;
+    let contractFile = resolveActiveContractFileName(contract);
     if (!contractFile) {
       contractFile = await generateContractPdf(contract);
       await contract.update({ contractFile });
@@ -983,13 +1084,19 @@ exports.issueContractSignLink = async (req, res) => {
       <p>Bitte öffnen Sie den folgenden Link und unterschreiben Sie den Vertrag direkt im Browser:</p>
       <p><a href="${signingUrl}" style="display: inline-block; background-color: #82ba26; padding: 10px 14px; border-radius: 10px; color: #ffffff; text-decoration: none; font-weight: 700;">Vertrag jetzt unterschreiben</a></p>
       <p>Oder kopieren Sie diesen Link in Ihren Browser:<br><a href="${signingUrl}">${signingUrl}</a></p>
-      <p>Der Link ist einmalig nutzbar und bis <strong>${expiryDate}</strong> gueltig.</p>
-      <p>Viele Gruesse<br><strong>Ihr Gruene Flotte Team</strong></p>
+      <p>Der Link ist einmalig nutzbar und bis <strong>${expiryDate}</strong> gültig.</p>
+      <p>Viele Grüße<br><strong>Ihr Grüne Flotte Team</strong></p>
     `;
     const generatedEmailContent = await generateEmailHtml(
       "Vertrag digital unterschreiben",
       mailBody,
     );
+    if (!contract.User?.email) {
+      return res.status(422).json({
+        success: false,
+        message: "Kunden-E-Mail fehlt. Signaturlink konnte nicht versendet werden.",
+      });
+    }
     await sendNotificationEmail(
       contract.User.email,
       null,
@@ -1074,26 +1181,27 @@ exports.getSignContractPreviewByToken = async (req, res) => {
   try {
     const { token } = req.params;
     const resolved = await resolveSignContractByToken(token);
-    if (resolved.contract && resolved.reason === "signed") {
-      return res.status(200).json({
-        success: true,
-        reason: "signed",
-        message: "Vertrag wurde bereits signiert.",
-      });
-    }
-    if (!resolved.contract || resolved.reason !== "valid") {
+    if (!resolved.contract) {
       return res.status(410).json({
         success: false,
         reason: resolved.reason || "invalid",
         message: "Signaturlink ist ungueltig, abgelaufen oder bereits genutzt.",
       });
     }
-    if (!resolved.contract.contractFile) {
+    if (resolved.reason && resolved.reason !== "valid" && resolved.reason !== "signed") {
+      return res.status(410).json({
+        success: false,
+        reason: resolved.reason || "invalid",
+        message: "Signaturlink ist ungueltig, abgelaufen oder bereits genutzt.",
+      });
+    }
+    const activeFile = resolveActiveContractFileName(resolved.contract);
+    if (!activeFile) {
       const generatedFile = await generateContractPdf(resolved.contract);
       await resolved.contract.update({ contractFile: generatedFile });
       return sendContractFileByName(res, generatedFile);
     }
-    return sendContractFileByName(res, resolved.contract.contractFile);
+    return sendContractFileByName(res, activeFile);
   } catch (error) {
     console.error("Get sign contract preview error:", error);
     return res.status(500).json({
@@ -1143,19 +1251,19 @@ exports.submitContractSignature = async (req, res) => {
     const userAgent = req.headers["user-agent"] || null;
     const signedAt = new Date();
     const signaturesDir = path.join(__dirname, "../internal-files/signatures");
-    if (!fs.existsSync(signaturesDir)) {
-      fs.mkdirSync(signaturesDir, { recursive: true });
-    }
+    await fs.promises.mkdir(signaturesDir, { recursive: true });
     const signatureFileName = `signature_${resolved.contract.id}_${Date.now()}.png`;
     const signaturePath = path.join(signaturesDir, signatureFileName);
-    fs.writeFileSync(signaturePath, signatureBuffer);
+    await fs.promises.writeFile(signaturePath, signatureBuffer);
 
+    const sourceFileName = resolveActiveContractFileName(resolved.contract);
     const signedContractFile = await generateContractPdf(resolved.contract, {
       signatureImageBuffer: signatureBuffer,
       signedAt,
       signatureFullName: fullName.trim(),
       signatureIp: clientIp,
       filePrefix: "vertrag_signiert",
+      sourceFileName,
     });
 
     await resolved.contract.update({
@@ -1167,12 +1275,15 @@ exports.submitContractSignature = async (req, res) => {
       signatureIp: clientIp,
       signatureUserAgent: userAgent,
       signatureFullName: fullName.trim(),
-      signTokenHash: null,
+      signTokenHash: resolved.tokenHash || resolved.contract.signTokenHash,
     });
 
     return res.status(200).json({
       success: true,
       message: "Vertrag erfolgreich signiert.",
+      signedPreviewUrl: `/contracts/sign/public/${encodeURIComponent(
+        resolved.normalizedToken,
+      )}/preview`,
     });
   } catch (error) {
     console.error("Submit signature error:", error);

@@ -17,8 +17,9 @@ const contractUploadStorage = multer.diskStorage({
     cb(null, path.join(__dirname, "../internal-files/contracts"));
   },
   filename: (req, file, cb) => {
-    const safeOriginal = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, "_");
-    cb(null, `${Date.now()}_${safeOriginal}`);
+    const extension = path.extname(file.originalname || ".pdf");
+    const contractId = req.params.id || "contract";
+    cb(null, `vertrag_upload_${contractId}_${Date.now()}${extension}`);
   },
 });
 
@@ -39,6 +40,11 @@ router.get(
   "/view/:filename",
   authenticateToken,
   contractController.viewContractFile
+);
+router.get(
+  "/signature/:filename",
+  authenticateToken,
+  contractController.viewSignatureFile
 );
 router.get(
   "/share/:accessKey",
@@ -72,7 +78,6 @@ router.post(
 router.get("/", authenticateToken, contractController.getAllContracts);
 router.post("/", contractController.createContract);
 router.post("/generate-pdf/:id", contractController.generateContract);
-router.patch("/:id", authenticateToken, contractController.updateContract);
 router.post(
   "/:id/upload-contract",
   authenticateToken,

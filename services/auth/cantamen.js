@@ -39,11 +39,22 @@ async function collectUserDataFromCantamen(id) {
   const apiKey = process.env.CANTAMEN_API_KEY;
   const authToken = btoa(id + ":");
   const userData = await getDefaultUserInformation(authToken, apiKey);
-  const sepaMandate = await checkForSepaMandate(authToken, apiKey);
+  const { hasActiveSepaMandate, activeSepaMandate } = await getSepaMandateData(
+    authToken,
+    apiKey,
+  );
+  const activeSepaAccount = await getActiveSepaAccount(authToken, apiKey);
 
   return {
     userData,
-    sepaMandate,
+    sepaMandate: hasActiveSepaMandate,
+    sepaMandateReference: activeSepaMandate?.reference || null,
+    sepaAccount: activeSepaAccount
+      ? {
+          iban: activeSepaAccount.iban || null,
+          accountHolder: activeSepaAccount.accountHolder || null,
+        }
+      : null,
   };
 }
 
@@ -104,8 +115,36 @@ async function getDefaultUserInformation(token, key) {
   };
 }
 
-async function checkForSepaMandate(token, key) {
-  const url = process.env.CANTAMEN_SEPA_MANDATE;
+function isEntryActive(entry) {
+  if (!entry) return false;
+  const now = new Date();
+  const start = entry.validity?.start ? new Date(entry.validity.start) : null;
+  const end = entry.validity?.end ? new Date(entry.validity.end) : null;
+  const expiry = entry.expiry ? new Date(entry.expiry) : null;
+
+  if (start && start > now) return false;
+  if (end && end <= now) return false;
+  if (expiry && expiry <= now) return false;
+
+  return true;
+}
+
+function getMostRecentActiveEntry(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  const active = entries.filter(isEntryActive);
+  if (active.length === 0) return null;
+
+  return active.sort((a, b) => {
+    const aStart = a.validity?.start ? new Date(a.validity.start).getTime() : 0;
+    const bStart = b.validity?.start ? new Date(b.validity.start).getTime() : 0;
+    return bStart - aStart;
+  })[0];
+}
+
+async function getSepaMandateData(token, key) {
+  const url =
+    process.env.CANTAMEN_SEPA_MANDATE ||
+    "https://de1.cantamen.de/casirest/v3/sepamandates";
 
   const response = await fetch(url, {
     headers: {
@@ -118,19 +157,39 @@ async function checkForSepaMandate(token, key) {
     throw new Error(`Fehler beim Abrufen der SEPA-Daten: ${response.status}`);
   }
 
-  const sepaMandateData = await response.json();
+  const sepaMandates = await response.json();
+  const activeSepaMandate = getMostRecentActiveEntry(sepaMandates);
 
-  const hasActiveSepaMandate =
-    new Date(sepaMandateData[0].expiry) > new Date() &&
-    (sepaMandateData[0].validity?.end != null
-      ? new Date(sepaMandateData[0].validity.end) > new Date()
-      : true);
+  return {
+    hasActiveSepaMandate: !!activeSepaMandate,
+    activeSepaMandate,
+  };
+}
 
-  return hasActiveSepaMandate;
+async function getActiveSepaAccount(token, key) {
+  const url =
+    process.env.CANTAMEN_SEPA_ACCOUNTS ||
+    "https://de1.cantamen.de/casirest/v3/sepaaccounts";
+
+  const response = await fetch(url, {
+    headers: {
+      authorization: "Basic " + token,
+      "X-Api-Key": key,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Fehler beim Abrufen der SEPA-Kontodaten: ${response.status}`,
+    );
+  }
+
+  const sepaAccounts = await response.json();
+  return getMostRecentActiveEntry(sepaAccounts);
 }
 
 module.exports = {
   authentificateWithCantamen,
   collectUserDataFromCantamen,
-  checkForSepaMandate,
+  getSepaMandateData,
 };
