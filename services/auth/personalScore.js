@@ -41,7 +41,7 @@ async function getUserScore(firstName, lastName, birthday, street, zipCode, city
         throw new Error(`Schufa Prüfung fehlgeschlagen: ${response.status}`);
     }
 
-    logger("info", "Schufa Prüfung erfolgreich");
+    logger('error', `Schufa Prüfung erfolgreich: ${score}, Bestellnummer: ${firstName}`);
 
     return { score };
 }

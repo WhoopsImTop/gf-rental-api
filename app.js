@@ -34,12 +34,36 @@ const { sanitizeRequestData } = require("./middleware/requestSanitizer");
 const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
 
+const allowedRootDomain = "gruene-flotte.com";
+
 const corsOptions = {
   origin: function (origin, callback) {
-    callback(null, origin || "*");
+    // Allow non-browser requests that do not send an Origin header.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    try {
+      const parsedOrigin = new URL(origin);
+      const host = parsedOrigin.hostname.toLowerCase();
+      const protocol = parsedOrigin.protocol;
+
+      const isAllowedDomain =
+        host === allowedRootDomain || host.endsWith(`.${allowedRootDomain}`);
+      const isHttps = protocol === "https:";
+      const isLocalhost = host === "localhost" || host === "127.0.0.1";
+
+      if ((isAllowedDomain && isHttps) || isLocalhost) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    } catch (error) {
+      return callback(new Error("Invalid Origin"));
+    }
   },
-  credentials: true,
-  methods: ["GET", "POST", "PATCH", "DELETE"], // Erlaubte HTTP-Methoden
+  credentials: false,
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], // Erlaubte HTTP-Methoden
   allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
 };
 

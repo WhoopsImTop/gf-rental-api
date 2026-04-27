@@ -359,7 +359,6 @@ exports.createContract = async (req, res) => {
           cartId,
         );
         //the score is between P and A and our settingkey is allowedScore
-        console.log(userScore.score, settings.allowedScore);
         if (userScore.score > settings.allowedScore) {
           throw new Error("SCORE_REJECTED");
         }
@@ -803,7 +802,6 @@ exports.generateContract = async (req, res) => {
       }),
     });
   } catch (err) {
-    console.log(err);
     res.status(500).json({
       error: "PDF konnte nicht erstellt werden",
       errorMessage: err,
@@ -894,7 +892,6 @@ exports.viewContractFile = async (req, res) => {
     const { filename } = req.params;
     const userId = req.user.id; // Aus dem JWT Token
     const userRole = req.user.role;
-    console.log(filename, userId, userRole);
     // 1. DB-Check: Gehört die Datei dem User? (Schutz gegen IDOR)
     const contract = await db.Contract.findOne({
       where: {
