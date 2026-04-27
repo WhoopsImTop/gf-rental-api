@@ -138,9 +138,8 @@ async function generateContractPdf(contractInstance, options = {}) {
       // Vertragsdetails [cite: 24-37]
       laufzeit: durationDisplay,
       kilometerleistung: `${contractInstance.price?.mileageKm || ""} km/Monat`,
-      freikilometer: `${contractInstance.price?.mileageKm || ""} km/Monat`,
       mehrkilometer: "",
-      mehrkilometerMultiplikator: "",
+      mehrkilometerMultiplikator: "0.37 €",
       kilometerstandAnkunft: "",
       kilometerstandAbfahrt: "",
 
@@ -218,7 +217,6 @@ async function generateContractPdf(contractInstance, options = {}) {
       customerContractSignature: signatureFullName,
       customerContractDate: signatureDateWithPlace,
       customerSEPASignature: "",
-      customerSEPADate: signatureDateWithPlace,
     };
 
     const normalizeFieldName = (value) =>
@@ -433,10 +431,6 @@ async function generateContractPdf(contractInstance, options = {}) {
       setFieldValue("customerContractDate", signatureDateWithPlace, [
         "CustomerContractDate",
       ]);
-      setFieldValue("customerSEPADate", signatureDateWithPlace, [
-        "CustomerSEPADate",
-      ]);
-
       // Signatur nur in den vorgesehenen PDF-Feldern platzieren.
     }
 

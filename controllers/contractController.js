@@ -10,7 +10,10 @@ const {
 } = require("../services/mailService");
 const { getGeoData } = require("../services/geoCoder");
 const { generateContractPdf } = require("../services/export/contractExport");
-const { orderAdminNotification } = require("../services/notification/order");
+const {
+  orderAdminNotification,
+  contractSignedAdminNotification,
+} = require("../services/notification/order");
 const { getUserScore } = require("../services/auth/personalScore");
 
 const SIGN_LINK_VALIDITY_HOURS = 72;
@@ -1277,6 +1280,8 @@ exports.submitContractSignature = async (req, res) => {
       signatureFullName: fullName.trim(),
       signTokenHash: resolved.tokenHash || resolved.contract.signTokenHash,
     });
+
+    await contractSignedAdminNotification(resolved.contract.id);
 
     return res.status(200).json({
       success: true,

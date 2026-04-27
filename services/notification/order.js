@@ -93,3 +93,64 @@ exports.orderAdminNotification = async (id) => {
     console.log(error);
   }
 };
+
+exports.contractSignedAdminNotification = async (id) => {
+  try {
+    const setting = await db.Setting.findOne();
+    const contract = await db.Contract.findOne({ where: { id } });
+    if (!setting?.notificationEmails || !contract) return;
+
+    const user = await db.User.findOne({
+      include: [{ model: db.CustomerDetails, as: "customerDetails" }],
+      where: { id: contract.userId },
+    });
+    const autoAbo = await db.CarAbo.findOne({
+      include: [
+        {
+          model: db.CarAboColor,
+          as: "colors",
+          include: [{ model: db.Media, as: "media" }],
+          where: { id: contract.colorId },
+          required: false,
+        },
+      ],
+      where: { id: contract.carAboId },
+    });
+
+    const previewImageUrl = autoAbo?.colors?.[0]?.media?.url || "";
+    const signedAtLabel = contract.signedAt
+      ? new Date(contract.signedAt).toLocaleString("de-DE")
+      : "-";
+
+    const emailContent = `
+${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>` : ""}
+<h2 style="font-weight: 900; margin: 0; padding: 0;">Vertrag digital unterschrieben</h2>
+<p>Der Kunde hat den Vertrag erfolgreich digital unterschrieben.</p>
+<hr style="margin: 10px; border: 1px solid #efefef;"/>
+<table style="width: 100%; border: 1px solid #efefef;">
+  <tbody>
+    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragsnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.id}</td></tr>
+    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Name</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user?.firstName || ""} ${user?.lastName || ""}</td></tr>
+    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">E-Mail</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user?.email || "-"}</td></tr>
+    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Fahrzeug</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${autoAbo?.displayName || "-"}</td></tr>
+    <tr><td style="padding: 8px 16px; margin: 0;">Signiert am</td><td style="padding: 8px 16px; margin: 0;">${signedAtLabel}</td></tr>
+  </tbody>
+</table>
+<p>Bitte prüft den signierten Vertrag in der Vertragsverwaltung und startet die weiteren Schritte.</p>
+`;
+
+    const generatedEmailContent = await generateEmailHtml(
+      `Vertrag digital unterschrieben #${contract.id}`,
+      emailContent,
+    );
+
+    await sendNotificationEmail(
+      setting.notificationEmails,
+      null,
+      `Vertrag unterschrieben: ${autoAbo?.displayName || "Auto Abo"} (#${contract.id})`,
+      generatedEmailContent,
+    );
+  } catch (error) {
+    console.log(error);
+  }
+};

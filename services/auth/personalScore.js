@@ -5,7 +5,12 @@ async function getUserScore(firstName, lastName, birthday, street, zipCode, city
 
     //birthday must be formed dd.mm.yyyy
     const date = new Date(birthday);
-    const formattedBirthday = `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
+
+	const day = String(date.getUTCDate()).padStart(2, '0');
+	const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+	const year = date.getUTCFullYear();
+
+	const formattedBirthday = `${day}.${month}.${year}`;
 
     const response = await fetch(url, {
         method: "POST",
@@ -16,6 +21,7 @@ async function getUserScore(firstName, lastName, birthday, street, zipCode, city
             vorname: firstName,
             nachname: lastName,
             geburtsdatum: formattedBirthday,
+			geschlecht: 'U',
             strasse: street,
             plz: zipCode,
             ort: city,
