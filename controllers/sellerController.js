@@ -5,7 +5,7 @@ exports.findAllSellers = async (req, res) => {
     const sellers = await db.Seller.findAll();
     return res.status(200).json(sellers);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -14,6 +14,6 @@ exports.createSeller = async (req, res) => {
     const seller = await db.Seller.create(req.body);
     return res.status(201).json(seller);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };

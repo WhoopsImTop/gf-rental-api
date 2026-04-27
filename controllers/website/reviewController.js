@@ -1,6 +1,10 @@
 const sequelize = require("sequelize");
 const db = require("../../models");
 
+function isValidEmail(value) {
+  return typeof value === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 exports.createReview = async (req, res) => {
   try {
     if (!req.body.rating || !req.body.review || !req.body.email) {
@@ -9,10 +13,15 @@ exports.createReview = async (req, res) => {
         message: "Bitte füllen Sie alle benötigten Felder aus.",
       });
     }
+
+    //validate email
+    if (!isValidEmail(req.body.email)) {
+      return res.status(400).json({ error: "Invalid email" });
+    }
     const reviews = await db.Review.create(req.body);
     return res.status(201).json(reviews);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "An unexpected error occurred" });
   }
 };
 
@@ -23,7 +32,7 @@ exports.findAllReviews = async (req, res) => {
     });
     return res.status(200).json(reviews);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "An unexpected error occurred" });
   }
 };
 
@@ -39,6 +48,6 @@ exports.deleteReview = async (req, res) => {
       throw new Error("Review wurde nicht gefunden");
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "An unexpected error occurred" });
   }
 };

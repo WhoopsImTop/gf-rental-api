@@ -18,7 +18,7 @@ exports.createCarsharingCar = async (req, res) => {
     }
     return res.status(201).json(carsharingCar);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -35,7 +35,7 @@ exports.findAllCarsharingCars = async (req, res) => {
     });
     return res.status(200).json(carsharingCars);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -60,7 +60,7 @@ exports.findOneCarsharingCar = async (req, res) => {
         .send("CarsharingCar with the specified ID does not exist");
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -104,7 +104,7 @@ exports.updateCarsharingCar = async (req, res) => {
       throw new Error("CarsharingCar not found");
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -120,7 +120,7 @@ exports.deleteCarsharingCar = async (req, res) => {
       throw new Error("CarsharingCar not found");
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -147,7 +147,7 @@ exports.addImageToCarsharingCar = async (req, res) => {
       .status(200)
       .json({ message: "Image added to CarsharingCar successfully" });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -174,6 +174,6 @@ exports.removeImageFromCarsharingCar = async (req, res) => {
       .status(200)
       .json({ message: "Image removed from CarsharingCar successfully" });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };

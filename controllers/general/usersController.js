@@ -14,7 +14,7 @@ exports.getCrmUsers = async (req, res) => {
 
     return res.status(200).json(users);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "An unexpected error occurred" });
   }
 };
 
@@ -44,6 +44,6 @@ exports.updateCrmUser = async (req, res) => {
     return res.status(200).json({ message: "User updated successfully" });
   } catch (error) {
     console.error("Error updating user:", error);
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "An unexpected error occurred" });
   }
 };

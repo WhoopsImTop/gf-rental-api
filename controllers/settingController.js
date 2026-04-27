@@ -5,7 +5,7 @@ exports.findSetting = async (req, res) => {
     const setting = await db.Setting.findOne();
     return res.status(200).json(setting);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Internal server error" });
   }
 };
 
@@ -23,13 +23,12 @@ exports.findInsurance = async (req, res) => {
       premiumDeductibleTeilkasko: setting.premiumDeductibleTeilkasko,
     });
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Internal server error" });
   }
 };
 
 exports.updateSetting = async (req, res) => {
   try {
-    console.log(req.body)
     let setting = await db.Setting.findOne();
 
     if (!setting) {
@@ -42,6 +41,6 @@ exports.updateSetting = async (req, res) => {
       return res.status(200).json(setting);
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Internal server error" });
   }
 };

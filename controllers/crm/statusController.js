@@ -21,7 +21,7 @@ exports.createStatus = async (req, res) => {
   } catch (error) {
     return res
       .status(500)
-      .json({ error: error.message, line: error.lineNumber });
+      .json({ error: "Es ist ein Fehler aufgetreten", line: error.lineNumber });
   }
 };
 
@@ -38,7 +38,7 @@ exports.findAllStatuses = async (req, res) => {
     });
     return res.status(200).json(statuses);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -63,7 +63,7 @@ exports.findOneStatus = async (req, res) => {
         .send("Status with the specified ID does not exist");
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -80,7 +80,7 @@ exports.updateStatus = async (req, res) => {
         .send("Status with the specified ID does not exist");
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -97,6 +97,6 @@ exports.deleteStatus = async (req, res) => {
         .send("Status with the specified ID does not exist");
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };

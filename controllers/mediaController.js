@@ -20,7 +20,7 @@ exports.uploadMedia = async (req, res) => {
       media: media,
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -51,7 +51,7 @@ exports.uploadMultipleMedia = async (req, res) => {
       media: uploadedMedia,
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -63,7 +63,7 @@ exports.getAllMedia = async (req, res) => {
     });
     return res.status(200).json(media);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -80,7 +80,7 @@ exports.getMediaById = async (req, res) => {
     
     return res.status(200).json(media);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -97,6 +97,6 @@ exports.deleteMedia = async (req, res) => {
       return res.status(404).json({ error: "Media not found" });
     }
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };

@@ -160,9 +160,8 @@ exports.syncCart = async (req, res) => {
 
     return res.json(cart);
   } catch (error) {
-    console.error("Error syncing cart:", error);
     logger("error", `[syncCart] ${error.message}`);
-    return res.status(500).json({ error: "Internal Server Error" });
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 

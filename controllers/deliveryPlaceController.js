@@ -19,7 +19,7 @@ exports.getAllDeliveryPlaces = async (req, res) => {
     });
     return res.status(200).json(places);
   } catch (error) {
-    return res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({ message: "Server error", error: "An unexpected error occurred" });
   }
 };
 
@@ -69,7 +69,7 @@ exports.createDeliveryPlace = async (req, res) => {
 
     return res.status(201).json(place);
   } catch (error) {
-    return res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({ message: "Server error", error: "An unexpected error occurred" });
   }
 };
 
@@ -132,7 +132,7 @@ exports.updateDeliveryPlace = async (req, res) => {
     await place.update(nextValues);
     return res.status(200).json(place);
   } catch (error) {
-    return res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({ message: "Server error", error: "An unexpected error occurred" });
   }
 };
 
@@ -145,6 +145,6 @@ exports.deleteDeliveryPlace = async (req, res) => {
     await place.destroy();
     return res.status(200).json({ message: "Lieferort gelöscht" });
   } catch (error) {
-    return res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({ message: "Server error", error: "An unexpected error occurred" });
   }
 };

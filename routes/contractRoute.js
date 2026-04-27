@@ -12,6 +12,12 @@ const publicSignLimiter = rateLimit({
   message: "Too many requests from this IP, please try again later",
 });
 
+const publicCreateContractLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: "Too many contract requests from this IP, please try again later",
+});
+
 const contractUploadStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, path.join(__dirname, "../internal-files/contracts"));
@@ -76,8 +82,8 @@ router.post(
   contractController.submitContractSignature
 );
 router.get("/", authenticateToken, contractController.getAllContracts);
-router.post("/", contractController.createContract);
-router.post("/generate-pdf/:id", contractController.generateContract);
+router.post("/", publicCreateContractLimiter, contractController.createContract);
+router.post("/generate-pdf/:id", authenticateToken, contractController.generateContract);
 router.post(
   "/:id/upload-contract",
   authenticateToken,

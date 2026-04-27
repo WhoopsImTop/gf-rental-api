@@ -5,8 +5,12 @@ exports.subscribeToNewsletter = async (req, res) => {
       //return res.status(403).json({ error: "Forbidden" });
     //}
     //check if email is valid
-    if (!req.body.email || !req.body.email.includes("@")) {
+    const email = String(req.body.email || "");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Invalid email" });
+    }
+    if (!process.env.BREVO_API_KEY) {
+      return res.status(503).json({ error: "Newsletter service unavailable" });
     }
     //make api call to brevo to subscribe to newsletter
     const response = await fetch("https://api.brevo.com/v3/contacts/doubleOptinConfirmation", {
@@ -16,7 +20,7 @@ exports.subscribeToNewsletter = async (req, res) => {
         "api-key": process.env.BREVO_API_KEY,
       },
       body: JSON.stringify({
-        email: req.body.email,
+        email,
         includeListIds: [2],
         redirectionUrl: "https://gruene-flotte.com/carsharing",
         templateId: 2,
@@ -29,6 +33,6 @@ exports.subscribeToNewsletter = async (req, res) => {
 
     return res.status(201).json({ message: "Subscribed to newsletter" });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: "An unexpected error occurred" });
   }
 };

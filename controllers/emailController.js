@@ -1,10 +1,12 @@
 const db = require("../models");
 const {
   generateEmailHtml,
-  sendEmail,
   sendNotificationEmail,
 } = require("../services/mailService");
-const { logger } = require("../services/logging");
+
+function isValidEmail(value) {
+  return typeof value === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 
 function formatContractStartingDate(dateValue) {
   if (!dateValue) return "-";
@@ -102,13 +104,26 @@ exports.resendConfirmation = async (req, res) => {
       .status(201)
       .json({ success: true, message: "Email sucessfully sent" });
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Internal server error" });
   }
 };
 
 exports.sendCustomEmail = async (req, res) => {
   const { title, message, email, cc } = req.body;
   try {
+    if (!title || !message || !email) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, message: "Invalid email" });
+    }
+    if (cc && !isValidEmail(cc)) {
+      return res.status(400).json({ success: false, message: "Invalid CC email" });
+    }
+    if (String(title).length > 180 || String(message).length > 10000) {
+      return res.status(400).json({ success: false, message: "Email content too long" });
+    }
+
     const generatedEmailContent = await generateEmailHtml(
       title,
       message
@@ -123,6 +138,6 @@ exports.sendCustomEmail = async (req, res) => {
       .status(201)
       .json({ success: true, message: "Email sucessfully sent" });
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Internal server error" });
   }
 };

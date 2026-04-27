@@ -59,7 +59,7 @@ exports.createCustomer = async (req, res) => {
   } catch (error) {
     return res
       .status(500)
-      .json({ error: error.message, line: error.lineNumber });
+      .json({ error: "Es ist ein Fehler aufgetreten", line: error.lineNumber });
   }
 };
 
@@ -92,7 +92,7 @@ exports.findAllCustomers = async (req, res) => {
     });
     return res.status(200).json(customers);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -132,7 +132,7 @@ exports.findOneCustomer = async (req, res) => {
         .send("Customer with the specified ID does not exist");
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -216,7 +216,7 @@ exports.updateCustomer = async (req, res) => {
       throw new Error("Update failed");
     }
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -278,7 +278,7 @@ exports.setCustomerAction = async (req, res) => {
 
     return res.status(201).json(actionHistory);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -301,7 +301,7 @@ exports.assignUserToCustomer = async (req, res) => {
 
     return res.status(200).json(user);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -324,7 +324,7 @@ exports.removeUserFromCustomer = async (req, res) => {
 
     return res.status(200).json(user);
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
@@ -339,6 +339,6 @@ exports.deleteCustomer = async (req, res) => {
     }
     throw new Error("Customer not found");
   } catch (error) {
-    return res.status(500).send({ error: error.message });
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
   }
 };

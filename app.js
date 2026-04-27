@@ -19,7 +19,7 @@ const deliveryCostsRoute = require("./routes/deliveryCosts");
 const deliveryPlacesRoute = require("./routes/deliveryPlaces");
 const emailRoute = require("./routes/emailRoute");
 const settingRoute = require("./routes/settingRoute");
-const contactRoute = require("./routes/website/contactRoute");7
+const contactRoute = require("./routes/website/contactRoute");
 const newsletterRoute = require("./routes/website/newsletterRoute");
 const sitemapRoute = require("./routes/website/sitemapRoute");
 
@@ -29,6 +29,7 @@ const analyticsRoute = require("./routes/analyticsRoute");
 
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
 const { authenticateToken } = require("./middleware/authMiddleware");
+const { sanitizeRequestData } = require("./middleware/requestSanitizer");
 
 const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
@@ -49,6 +50,7 @@ app.use("/public", cors(corsOptions), express.static("public"));
 // Weitere Routen und Middleware
 app.use(cors(corsOptions)); // Gilt für die anderen Routen
 app.use(bodyParser.json({ limit: "5mb" }));
+app.use(sanitizeRequestData);
 app.use(
   helmet({
     frameguard: false,
@@ -60,12 +62,6 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
   message: "Too many requests from this IP, please try again later"
-});
-
-// Allgemeine Fehlerbehandlung
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: "Interner Serverfehler!" });
 });
 
 // Route zum Testen
@@ -90,7 +86,7 @@ app.use("/api/settings", settingRoute);
 
 //CRM-Routen
 app.use("/api/crm/customers", authenticateToken, crmCustomerRoute);
-app.use("/api/crm/status", statusRoute);
+app.use("/api/crm/status", authenticateToken, statusRoute);
 
 //Website-Routen (öffentlich)
 app.use("/api/mailing-list", newsletterRoute);
@@ -98,6 +94,12 @@ app.use("/api/reviews", reviewRoute);
 app.use("/api/analytics", analyticsRoute);
 app.use("/api/business/contact", contactRoute);
 app.use("/api/sitemap.xml", sitemapRoute);
+
+// Allgemeine Fehlerbehandlung
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: "Interner Serverfehler!" });
+});
 
 // Server starten und Datenbankverbindung prüfen
 app.listen(serverPort, async () => {

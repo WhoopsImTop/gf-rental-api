@@ -30,18 +30,18 @@ async function getUserScore(firstName, lastName, birthday, street, zipCode, city
     });
 
     if (!response.ok) {
-        logger('error', `Schufa Prüfung fehlgeschlagen: ${response.status}, Bestellnummer: ${firstName} ${lastName} ${birthday} ${street} ${zipCode} ${city}`);
+        logger("error", `Schufa Prüfung fehlgeschlagen: ${response.status}`);
     }
 
     const data = await response.json();
     const score = data.response;
 
     if (!score) {
-        logger('error', `Schufa Prüfung fehlgeschlagen: ${response.status}, Bestellnummer: ${firstName} ${lastName} ${birthday} ${street} ${zipCode} ${city}`);
+        logger("error", `Schufa Prüfung fehlgeschlagen: ${response.status}`);
         throw new Error(`Schufa Prüfung fehlgeschlagen: ${response.status}`);
     }
 
-    logger('error', `Schufa Prüfung erfolgreich: ${score}, Bestellnummer: ${firstName} ${lastName} ${birthday} ${street} ${zipCode} ${city}`);
+    logger("info", "Schufa Prüfung erfolgreich");
 
     return { score };
 }
