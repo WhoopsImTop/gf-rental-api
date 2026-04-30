@@ -30,11 +30,16 @@ const analyticsRoute = require("./routes/analyticsRoute");
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
 const { authenticateToken } = require("./middleware/authMiddleware");
 const { sanitizeRequestData } = require("./middleware/requestSanitizer");
+const { startAnonymizationScheduler } = require("./services/privacy/anonymizationScheduler");
 
 const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
 
+// Korrekte Client-IPs hinter Reverse-Proxy (z. B. Plesk) für Rate-Limits / Audit
+app.set("trust proxy", 1);
+
 const allowedRootDomain = "gruene-flotte.com";
+const isProduction = process.env.NODE_ENV === "production";
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -53,7 +58,10 @@ const corsOptions = {
       const isHttps = protocol === "https:";
       const isLocalhost = host === "localhost" || host === "127.0.0.1";
 
-      if ((isAllowedDomain && isHttps) || isLocalhost) {
+      if (isAllowedDomain && isHttps) {
+        return callback(null, true);
+      }
+      if (!isProduction && isLocalhost) {
         return callback(null, true);
       }
 
@@ -77,8 +85,14 @@ app.use(bodyParser.json({ limit: "5mb" }));
 app.use(sanitizeRequestData);
 app.use(
   helmet({
-    frameguard: false,
-    contentSecurityPolicy: false,
+    frameguard: { action: "deny" },
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+      },
+    },
   }),
 );
 
@@ -132,6 +146,7 @@ app.listen(serverPort, async () => {
   try {
     await sequelize.authenticate(); // Verbindung zur Datenbank testen
     console.log("Datenbankverbindung erfolgreich!");
+    startAnonymizationScheduler();
   } catch (error) {
     console.error("Fehler bei der Verbindung zur Datenbank:", error);
     process.exit(1); // Beende den Prozess, falls die Verbindung fehlschlägt

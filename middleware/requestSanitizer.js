@@ -14,8 +14,11 @@ function sanitizeValue(value) {
   }
 
   if (value && typeof value === "object") {
-    const sanitizedObject = {};
+    const sanitizedObject = Object.create(null);
     for (const key of Object.keys(value)) {
+      if (key === "__proto__" || key === "constructor" || key === "prototype") {
+        continue;
+      }
       sanitizedObject[key] = sanitizeValue(value[key]);
     }
     return sanitizedObject;

@@ -21,7 +21,11 @@ exports.sendContactInquiry = async (req, res) => {
             'autoabo@gruene-flotte.com',
             null,
             "Auto Abo Beratung",
-            `Name: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nMessage: ${message}`,
+            "",
+            null,
+            {
+                plainText: `Name: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nMessage: ${message}`,
+            },
         );
         if (emailSent) {
             return res.status(200).json({ message: "Email sent successfully" });

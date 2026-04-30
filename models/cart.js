@@ -1,4 +1,5 @@
 "use strict";
+const crypto = require("crypto");
 const { Model } = require("sequelize");
 
 module.exports = (sequelize, DataTypes) => {
@@ -12,6 +13,11 @@ module.exports = (sequelize, DataTypes) => {
   }
   Cart.init(
     {
+      accessToken: {
+        type: DataTypes.STRING(64),
+        allowNull: false,
+        unique: true,
+      },
       userId: {
         type: DataTypes.INTEGER,
         allowNull: true,
@@ -54,6 +60,13 @@ module.exports = (sequelize, DataTypes) => {
     {
       sequelize,
       modelName: "Cart",
+      hooks: {
+        beforeValidate(cart) {
+          if (!cart.accessToken || String(cart.accessToken).trim() === "") {
+            cart.accessToken = crypto.randomBytes(32).toString("hex");
+          }
+        },
+      },
     }
   );
   return Cart;

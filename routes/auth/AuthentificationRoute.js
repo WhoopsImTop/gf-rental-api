@@ -2,6 +2,13 @@ const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../../middleware/authMiddleware");
 const {
+  loginLimits,
+  verifyOtpLimits,
+  mailTriggerLimits,
+  resetPasswordLimits,
+  verifyMfaLoginLimits,
+} = require("../../middleware/authRateLimits");
+const {
   registerUser,
   loginUser,
   requestOtp,
@@ -18,20 +25,20 @@ const {
 } = require("../../controllers/auth/AuthentificationController");
 
 router.post("/register", registerUser);
-router.post("/login", loginUser);
+router.post("/login", ...loginLimits, loginUser);
 
 router.post("/cantamen/authentificate", cantamenAuth);
 router.post("/cantamen/verify", verifyCantamenCredentials);
 
-router.post("/request-otp", requestOtp);
-router.post("/verify-otp", verifyOtp);
+router.post("/request-otp", ...mailTriggerLimits, requestOtp);
+router.post("/verify-otp", ...verifyOtpLimits, verifyOtp);
 
 // Password reset (public)
-router.post("/request-password-reset", requestPasswordReset);
-router.post("/reset-password", resetPassword);
+router.post("/request-password-reset", ...mailTriggerLimits, requestPasswordReset);
+router.post("/reset-password", ...resetPasswordLimits, resetPassword);
 
 // MFA login verification (public — uses mfaToken)
-router.post("/verify-mfa-login", verifyMfaLogin);
+router.post("/verify-mfa-login", ...verifyMfaLoginLimits, verifyMfaLogin);
 
 // MFA setup/management (protected)
 router.get("/mfa/status", authenticateToken, getMfaStatus);

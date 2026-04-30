@@ -15,6 +15,9 @@ const {
   contractSignedAdminNotification,
 } = require("../services/notification/order");
 const { getUserScore } = require("../services/auth/personalScore");
+const { logSecurityEvent } = require("../services/audit/securityAudit");
+const { normalizeCartAccessToken } = require("../utils/cartAccessToken");
+const { escapeHtml } = require("../services/util/escapeHtml");
 
 const SIGN_LINK_VALIDITY_HOURS = 72;
 const SHARE_LINK_VALIDITY_HOURS = 168;
@@ -220,17 +223,13 @@ exports.getAllContracts = async (req, res) => {
 };
 
 exports.createContract = async (req, res) => {
-  let {
-    carAboId,
-    colorId,
-    userId,
-    customerDetails, // birthday, street, housenumber, postalCode, city, country, driversLicenseNumber, IdCardNumber, newsletter, consents, allowedLicenseClasses, licenseValidUntil, licenseIssuingPlace, licenseIssuedOn, placeOfBirth
-    contractData, // duration, startingDate, monthlyPrice, totalCost, insurancePackage, insuranceCosts, familyAndFriends, delivery options
-    paymentData, // iban, accountHolderName, sepaMandate, score
-    cartId,
-  } = req.body;
+  const { customerDetails, contractData, paymentData } = req.body;
+  const accessToken = normalizeCartAccessToken(req.body.accessToken);
 
   try {
+    if (!accessToken) {
+      throw new Error("MISSING_ACCESS_TOKEN");
+    }
     if (!customerDetails || typeof customerDetails !== "object") {
       throw new Error("MISSING_CUSTOMER_DETAILS");
     }
@@ -242,26 +241,75 @@ exports.createContract = async (req, res) => {
     }
 
     const result = await db.sequelize.transaction(async (transaction) => {
-      if (!userId) {
-        logger(
-          "error",
-          "Creating Contract lasted in Error because of missing userID",
-        );
-        if (!userId) {
-          // Wirf einen Fehler, der die Transaktion abbricht!
-          throw new Error("MISSING_USER_ID");
-        }
+      const Cart = await db.Cart.findOne({
+        where: { accessToken },
+        include: [
+          {
+            model: db.CarAbo,
+            as: "car",
+            include: [
+              { model: db.CarAboPrice, as: "prices" },
+              {
+                model: db.CarAboColor,
+                as: "colors",
+                include: [{ model: db.Media, as: "media" }],
+              },
+              {
+                model: db.CarAboMedia,
+                as: "media",
+                include: [{ model: db.Media, as: "media" }],
+              },
+              {
+                model: db.Seller,
+                as: "seller",
+              },
+            ],
+          },
+        ],
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!Cart) {
+        throw new Error("CART_NOT_FOUND");
       }
 
-      // 1. Create or Update CustomerDetails
+      if (Cart.completed) {
+        const lastContract = await db.Contract.findOne({
+          where: {
+            userId: Cart.userId,
+            carAboId: Cart.carAboId,
+            colorId: Cart.colorId,
+            priceId: Cart.priceId,
+          },
+          order: [["createdAt", "DESC"]],
+          transaction,
+        });
+        if (lastContract) {
+          return { idempotent: true, contractId: lastContract.id };
+        }
+        throw new Error("CART_ALREADY_COMPLETED");
+      }
+
+      if (!Cart.userId) {
+        throw new Error("CART_USER_NOT_VERIFIED");
+      }
+
+      const userId = Cart.userId;
+      const colorId = Cart.colorId;
+      const carAboId = Cart.carAboId;
+
       let details = await db.CustomerDetails.findOne({
         where: { userId },
         transaction,
       });
 
-      //Make licenseIssuedOn and licenseValidUntil ISO date
-      const licenseIssuedOn = customerDetails.licenseIssuedOn ? new Date(customerDetails.licenseIssuedOn) : null;
-      const licenseValidUntil = customerDetails.licenseValidUntil ? new Date(customerDetails.licenseValidUntil) : null;
+      const licenseIssuedOn = customerDetails.licenseIssuedOn
+        ? new Date(customerDetails.licenseIssuedOn)
+        : null;
+      const licenseValidUntil = customerDetails.licenseValidUntil
+        ? new Date(customerDetails.licenseValidUntil)
+        : null;
 
       const detailsPayload = {
         userId,
@@ -291,7 +339,6 @@ exports.createContract = async (req, res) => {
         await db.CustomerDetails.create(detailsPayload, { transaction });
       }
 
-      // Also update User basic info if provided
       if (
         customerDetails.firstName ||
         customerDetails.lastName ||
@@ -311,41 +358,9 @@ exports.createContract = async (req, res) => {
         });
       }
 
-      const Cart = await db.Cart.findOne({
-        where: { id: cartId },
-        include: [
-          {
-            model: db.CarAbo,
-            as: "car",
-            include: [
-              { model: db.CarAboPrice, as: "prices" },
-              {
-                model: db.CarAboColor,
-                as: "colors",
-                include: [{ model: db.Media, as: "media" }],
-              },
-              {
-                model: db.CarAboMedia,
-                as: "media",
-                include: [{ model: db.Media, as: "media" }],
-              },
-              {
-                model: db.Seller,
-                as: "seller",
-              },
-            ],
-          },
-        ],
-      });
-
-      if (!Cart) {
-        throw new Error("CART_NOT_FOUND");
-      }
-
       let userScore = { score: "Kein Score vorhanden" };
       if (!Cart.syncedByCantamen) {
-        // check if personal score of user is matching the score in the settings
-        const settings = await db.Setting.findOne();
+        const settings = await db.Setting.findOne({ transaction });
         if (!settings || settings.allowedScore == null) {
           throw new Error("SETTINGS_ALLOWED_SCORE_MISSING");
         }
@@ -356,27 +371,13 @@ exports.createContract = async (req, res) => {
           customerDetails.street + " " + customerDetails.housenumber,
           customerDetails.postalCode,
           customerDetails.city,
-          cartId,
+          Cart.id,
         );
-        //the score is between P and A and our settingkey is allowedScore
         if (userScore.score > settings.allowedScore) {
           throw new Error("SCORE_REJECTED");
         }
       }
 
-      //check if color is already ordered if so return a message and a redirectUrl /leider-abonniert
-      const color = await db.CarAboColor.findOne({
-        where: {
-          id: colorId,
-          isOrdered: true,
-        },
-      });
-
-      if (color) {
-        throw new Error("COLOR_ALREADY_ORDERED");
-      }
-
-      //get Lat Lng
       let lat = null;
       let lon = null;
       if (detailsPayload.street && detailsPayload.city) {
@@ -386,9 +387,6 @@ exports.createContract = async (req, res) => {
         lon = geoData?.lon;
       }
 
-      // 2. Create Contract
-
-      //2.1 Create duration, monthlyPrice and totalcosts
       const syncedByCantamen = Cart.syncedByCantamen || false;
 
       let selectedPrice = null;
@@ -410,17 +408,21 @@ exports.createContract = async (req, res) => {
         validDurationType === "minimum"
           ? parseFloat(selectedPrice.priceMinimumDuration)
           : parseFloat(selectedPrice.priceFixedDuration);
-      if (!Number.isFinite(basePrice) || !Number.isFinite(Number(duration)) || Number(duration) <= 0) {
+      if (
+        !Number.isFinite(basePrice) ||
+        !Number.isFinite(Number(duration)) ||
+        Number(duration) <= 0
+      ) {
         throw new Error("PRICE_CONFIGURATION_INVALID");
       }
       const depVal = parseFloat(Cart.depositValue) || 0;
       let monthlyPrice = basePrice;
       if (depVal > 0) {
-        monthlyPrice = basePrice - (depVal * 1.025) / parseInt(duration);
+        monthlyPrice = basePrice - (depVal * 1.025) / parseInt(duration, 10);
       }
-      //check if insurance is included and add it to the monthly price
       if (contractData.insurancePackage) {
-        monthlyPrice += parseFloat(contractData.insuranceCosts);
+        const ins = parseFloat(contractData.insuranceCosts);
+        monthlyPrice += Number.isFinite(ins) ? ins : 0;
       }
       monthlyPrice = Math.round(monthlyPrice);
       const totalCost = duration * monthlyPrice;
@@ -428,8 +430,6 @@ exports.createContract = async (req, res) => {
       const contract = await db.Contract.create(
         {
           userId,
-          duration: contractData.duration,
-          totalCost: contractData.totalCost,
           startingDate: contractData.startingDate,
           insurancePackage: contractData.insurancePackage || false,
           insuranceType: contractData.insuranceType || "none",
@@ -441,7 +441,6 @@ exports.createContract = async (req, res) => {
           familyAndFriends: contractData.familyAndFriends || false,
           familyAndFriendsCosts: contractData.familyAndFriendsCosts || 0,
           familyAndFriendsMembers: contractData.familyAndFriendsMembers || [],
-          // Delivery
           wantsDelivery: contractData.wantsDelivery || false,
           deliveryCosts: contractData.deliveryCosts || 0,
           differentDeliveryAdress:
@@ -451,18 +450,15 @@ exports.createContract = async (req, res) => {
           deliveryPostalCode: contractData.deliveryPostalCode || null,
           deliveryCountry: contractData.deliveryCountry || null,
           deliveryNote: contractData.deliveryNote || null,
-          // Payment
           accountHolderName: paymentData.accountHolderName || null,
           iban: paymentData.iban || null,
           sepaMandate: paymentData.sepaMandate || false,
           mandateReference: paymentData.mandateReference || null,
           sepaMandateDate: paymentData.sepaMandate ? new Date() : null,
-          score: paymentData.score || null,
-          // Status
           oderStatus: "started",
-          duration: duration,
-          monthlyPrice: monthlyPrice.toFixed(2) || monthlyPrice,
-          totalCost: totalCost,
+          duration,
+          monthlyPrice: monthlyPrice.toFixed(2) || String(monthlyPrice),
+          totalCost,
           orderCompleted: true,
           carAboId: Cart.carAboId,
           colorId: Cart.colorId,
@@ -478,14 +474,12 @@ exports.createContract = async (req, res) => {
         { transaction },
       );
 
-      // 3. Link CarAbo to Contract
       await contract.setCarAbo(carAboId, { transaction });
       await db.CarAbo.update(
         { ContractId: contract.id, status: "reserved" },
         { where: { id: carAboId }, transaction },
       );
 
-      // 4. Update Color Variant Stock
       if (colorId) {
         const colorToUpdate = await db.CarAboColor.findOne({
           where: { id: colorId },
@@ -500,7 +494,6 @@ exports.createContract = async (req, res) => {
           Number.isInteger(colorToUpdate.availableInDays) &&
           colorToUpdate.availableInDays >= 0;
 
-        // Freeze "Verfügbar ab" at order time for dynamic day-based colors.
         if (hasDynamicAvailability) {
           colorUpdatePayload.availableFrom = addDays(
             new Date(),
@@ -508,25 +501,29 @@ exports.createContract = async (req, res) => {
           );
         }
 
-        await db.CarAboColor.update(
-          colorUpdatePayload,
-          { where: { id: colorId }, transaction },
-        );
+        const [affectedRows] = await db.CarAboColor.update(colorUpdatePayload, {
+          where: { id: colorId, isOrdered: false },
+          transaction,
+        });
+
+        if (affectedRows === 0) {
+          const c = await db.CarAboColor.findByPk(colorId, { transaction });
+          if (c && c.isOrdered) {
+            throw new Error("COLOR_ALREADY_ORDERED");
+          }
+          throw new Error("COLOR_RACE_LOST");
+        }
       }
 
-      // 5. Mark Cart as Completed
-      if (cartId) {
-        await db.Cart.update(
-          { completed: true },
-          { where: { id: cartId }, transaction },
-        );
-      }
+      await db.Cart.update(
+        { completed: true },
+        { where: { id: Cart.id, accessToken }, transaction },
+      );
 
-      // 6. send Email to Customer
       const user = await db.User.findOne({
         include: [{ model: db.CustomerDetails, as: "customerDetails" }],
         where: { id: userId },
-        transaction, // <--- DAS HAT GEFEHLT
+        transaction,
       });
 
       const autoAbo = await db.CarAbo.findOne({
@@ -544,10 +541,9 @@ exports.createContract = async (req, res) => {
           },
         ],
         where: { id: contract.carAboId },
-        transaction, // <--- AUCH HIER
+        transaction,
       });
 
-      // Sicherheits-Check: Falls User trotzdem nicht gefunden wurde
       if (!user) {
         throw new Error("User for email notification not found");
       }
@@ -557,22 +553,22 @@ exports.createContract = async (req, res) => {
       const previewImageUrl = autoAbo?.colors?.[0]?.media?.url || "";
 
       const emailContent = `
-${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>` : ""}
-<p>Guten Tag ${user.firstName} ${user.lastName + "," ?? ""}</p>
+${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" height="auto"/>` : ""}
+<p>Guten Tag ${escapeHtml(user.firstName)} ${escapeHtml(user.lastName)},</p>
       <p>Hiermit bestätigen wir Ihr Abo Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Ihre Daten</h2>
       <table style="width: 100%; border: 1px solid #efefef;">
         <tbody>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.firstName}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.lastName}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.street} ${
-            user.customerDetails.housenumber
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">PLZ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.postalCode}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.city}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Telefon</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.phone}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Email</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.email}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.firstName)}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.lastName)}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.street)} ${escapeHtml(
+            user.customerDetails.housenumber,
+          )}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">PLZ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.postalCode)}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.city)}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Telefon</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.phone)}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Email</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.email)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${formatContractStartingDate(contract.startingDate)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Sicherheitspaket</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
             contract.insuranceType === "premium"
@@ -589,12 +585,12 @@ ${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>`
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Kilometerleistung</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
             selectedPrice.mileageKm
           }km</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Führerscheinnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            user.customerDetails.driversLicenseNumber
-          }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
-            user.customerDetails.IdCardNumber
-          }</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Führerscheinnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(
+            user.customerDetails.driversLicenseNumber,
+          )}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(
+            user.customerDetails.IdCardNumber,
+          )}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Monatliche Gesamtrate:</td><td style="padding: 8px 16px; margin: 0;border-bottom: 1px solid #efefef">${parseFloat(contract.monthlyPrice).toFixed(2)} €</td></tr>
         ${
           contract.depositValue > 0
@@ -636,7 +632,6 @@ ${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>`
       );
 
       if (!emailSent) {
-        // Hier "contract.id" statt "Contract.id" (Variablen sind Case-Sensitive!)
         logger(
           "error",
           "Email konnte nicht versendet werden für Contract: #" + contract.id,
@@ -648,15 +643,67 @@ ${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>`
       return contract;
     });
 
+    if (result && result.idempotent) {
+      logSecurityEvent({
+        req,
+        action: "create_contract",
+        outcome: "idempotent",
+        accessToken,
+        extra: { contractId: result.contractId },
+      });
+      return res.status(200).json({
+        message: "Contract already created for this cart",
+        contractId: result.contractId,
+        idempotent: true,
+      });
+    }
+
+    logSecurityEvent({
+      req,
+      action: "create_contract",
+      outcome: "success",
+      accessToken,
+      extra: { contractId: result.id },
+    });
+
     res.status(201).json({
       message: "Contract created successfully",
       contractId: result.id,
     });
-    // ÄUSSERER Catch-Block:
   } catch (error) {
     console.error("Error creating contract:", error);
 
-    // Eigene Fehler abfangen und richtig beantworten
+    logSecurityEvent({
+      req,
+      action: "create_contract",
+      outcome: "fail",
+      accessToken,
+      extra: { error: error.message },
+    });
+
+    if (error.message === "MISSING_ACCESS_TOKEN") {
+      return res.status(400).json({
+        message: "Warenkorb-Token fehlt. Bitte starte die Buchung erneut.",
+      });
+    }
+    if (error.message === "CART_USER_NOT_VERIFIED") {
+      return res.status(401).json({
+        message:
+          "Bitte bestätige zuerst deine E-Mail oder melde dich mit deinem Carsharing-Account an.",
+      });
+    }
+    if (error.message === "CART_ALREADY_COMPLETED") {
+      return res.status(409).json({
+        message:
+          "Diese Buchung wurde bereits abgeschlossen. Bitte wähle ein neues Fahrzeug.",
+      });
+    }
+    if (error.message === "COLOR_RACE_LOST") {
+      return res.status(200).json({
+        message: "Color is already ordered",
+        redirectUrl: "/leider-abonniert",
+      });
+    }
     if (error.message === "MISSING_USER_ID") {
       return res
         .status(400)
@@ -707,7 +754,6 @@ ${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>`
       });
     }
 
-    // Genereller Server-Fehler
     logger("error", "Error creating contract" + error);
     res.status(500).json({
       message: "Internal server error",
@@ -715,6 +761,7 @@ ${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>`
     });
   }
 };
+
 
 exports.archiveContract = async (req, res) => {
   const id = req.params.id;
@@ -824,6 +871,31 @@ exports.uploadContractFile = async (req, res) => {
         success: false,
         message: "Bitte eine gueltige PDF-Datei hochladen.",
       });
+    }
+
+    const uploadedPath = req.file.path;
+    if (uploadedPath) {
+      let fh;
+      try {
+        fh = await fs.promises.open(uploadedPath, "r");
+        const header = Buffer.alloc(5);
+        await fh.read(header, 0, 5, 0);
+        if (header.toString("ascii") !== "%PDF-") {
+          await fs.promises.unlink(uploadedPath).catch(() => {});
+          return res.status(400).json({
+            success: false,
+            message: "Die Datei ist keine gueltige PDF-Datei.",
+          });
+        }
+      } catch (e) {
+        await fs.promises.unlink(uploadedPath).catch(() => {});
+        return res.status(400).json({
+          success: false,
+          message: "Die Datei konnte nicht geprueft werden.",
+        });
+      } finally {
+        if (fh) await fh.close().catch(() => {});
+      }
     }
 
     const newFileName = req.file.filename;
@@ -1079,8 +1151,8 @@ exports.issueContractSignLink = async (req, res) => {
     const carName = contract.carAbo?.displayName || "Ihr Fahrzeug";
     const expiryDate = signExpiresAt.toLocaleString("de-DE");
     const mailBody = `
-      <p>Hallo ${customerFirstName},</p>
-      <p>Ihr Vertrag für <strong>${carName}</strong> ist zur digitalen Unterschrift bereit.</p>
+      <p>Hallo ${escapeHtml(customerFirstName)},</p>
+      <p>Ihr Vertrag für <strong>${escapeHtml(carName)}</strong> ist zur digitalen Unterschrift bereit.</p>
       <p>Bitte öffnen Sie den folgenden Link und unterschreiben Sie den Vertrag direkt im Browser:</p>
       <p><a href="${signingUrl}" style="display: inline-block; background-color: #82ba26; padding: 10px 14px; border-radius: 10px; color: #ffffff; text-decoration: none; font-weight: 700;">Vertrag jetzt unterschreiben</a></p>
       <p>Oder kopieren Sie diesen Link in Ihren Browser:<br><a href="${signingUrl}">${signingUrl}</a></p>
