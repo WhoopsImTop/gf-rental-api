@@ -12,7 +12,7 @@ exports.uploadMedia = async (req, res) => {
       name: req.file.originalname,
       fileSize: req.file.size,
       fileType: req.file.mimetype,
-      url: process.env.APPIMAGEURL + "/public/uploads/" + req.file.filename,
+      url: process.env.APPIMAGEURL + "/uploads/" + req.file.filename,
     });
     
     return res.status(201).json({
@@ -40,7 +40,7 @@ exports.uploadMultipleMedia = async (req, res) => {
         name: file.originalname,
         fileSize: file.size,
         fileType: file.mimetype,
-        url: process.env.APPIMAGEURL + "/public/uploads/" + file.filename,
+        url: process.env.APPIMAGEURL + "/uploads/" + file.filename,
       });
       
       uploadedMedia.push(media);
