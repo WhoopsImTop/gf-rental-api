@@ -97,17 +97,30 @@ exports.sendNotificationEmail = async (
   title,
   message,
   attachments = null,
+  options = {},
 ) => {
   try {
-    const info = await transporter.sendMail({
+    const plainText =
+      options && typeof options === "object" && options.plainText != null
+        ? options.plainText
+        : null;
+
+    const mailPayload = {
       from: '"Grüne Flotte Auto Abo" <info@gruene-flotte-autoabo.de>', // sender address
       cc: cc,
       to: email, // list of receivers
       subject: title, // Subject line
-      text: `${message}`, // plain text body
-      html: `${message}`, // html body
       attachments: attachments,
-    });
+    };
+
+    if (plainText != null) {
+      mailPayload.text = String(plainText);
+    } else {
+      mailPayload.text = `${message}`;
+      mailPayload.html = `${message}`;
+    }
+
+    const info = await transporter.sendMail(mailPayload);
 
     console.log("Message sent: %s", info.messageId);
     return true;

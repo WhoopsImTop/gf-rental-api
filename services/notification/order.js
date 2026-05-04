@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { logger } = require("../logging");
 const { generateEmailHtml, sendNotificationEmail } = require("../mailService");
+const { escapeHtml } = require("../util/escapeHtml");
 
 function formatContractStartingDate(dateValue) {
   if (!dateValue) return "-";
@@ -49,22 +50,22 @@ exports.orderAdminNotification = async (id) => {
       },
     });
     const emailContent = `
-<img src="${autoAbo.colors[0].media.url}" width="100%" height="auto"/>
-<span>Fahrzeug ID (${autoAbo.colors[0].internalId})</span>
+<img src="${escapeHtml(autoAbo.colors[0].media.url)}" width="100%" height="auto"/>
+<span>Fahrzeug ID (${escapeHtml(autoAbo.colors[0].internalId)})</span>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Neues Auto Abo!</h2>
       <p>Hallo Grüne Flotte Abo-Team, es wurde ein neues Auto Abo abgeschlossen.</p>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <table style="width: 100%; border: 1px solid #efefef;">
         <tbody>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.firstName
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.firstName)
       }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.lastName
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.lastName)
       }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.street
-      } ${user.customerDetails.housenumber}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">PLZ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.postalCode
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.street)
+      } ${escapeHtml(user.customerDetails.housenumber)}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">PLZ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.postalCode)
       }</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user.customerDetails.city
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ort</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.city)
       }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${formatContractStartingDate(contract.startingDate)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.duration
@@ -123,16 +124,16 @@ exports.contractSignedAdminNotification = async (id) => {
       : "-";
 
     const emailContent = `
-${previewImageUrl ? `<img src="${previewImageUrl}" width="100%" height="auto"/>` : ""}
+${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" height="auto"/>` : ""}
 <h2 style="font-weight: 900; margin: 0; padding: 0;">Vertrag digital unterschrieben</h2>
 <p>Der Kunde hat den Vertrag erfolgreich digital unterschrieben.</p>
 <hr style="margin: 10px; border: 1px solid #efefef;"/>
 <table style="width: 100%; border: 1px solid #efefef;">
   <tbody>
     <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragsnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.id}</td></tr>
-    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Name</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user?.firstName || ""} ${user?.lastName || ""}</td></tr>
-    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">E-Mail</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${user?.email || "-"}</td></tr>
-    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Fahrzeug</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${autoAbo?.displayName || "-"}</td></tr>
+    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Name</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user?.firstName || "")} ${escapeHtml(user?.lastName || "")}</td></tr>
+    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">E-Mail</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user?.email || "-")}</td></tr>
+    <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Fahrzeug</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(autoAbo?.displayName || "-")}</td></tr>
     <tr><td style="padding: 8px 16px; margin: 0;">Signiert am</td><td style="padding: 8px 16px; margin: 0;">${signedAtLabel}</td></tr>
   </tbody>
 </table>

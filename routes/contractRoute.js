@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const rateLimit = require("express-rate-limit");
+const slowDown = require("express-slow-down");
 const multer = require("multer");
 const path = require("path");
 const contractController = require("../controllers/contractController");
@@ -16,6 +17,14 @@ const publicCreateContractLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: "Too many contract requests from this IP, please try again later",
+});
+
+const publicCreateContractSlowDown = slowDown({
+  windowMs: 60 * 1000,
+  delayAfter: 8,
+  delayMs: () => 250,
+  maxDelayMs: 8000,
+  skipSuccessfulRequests: true,
 });
 
 const contractUploadStorage = multer.diskStorage({
@@ -35,7 +44,7 @@ const contractUpload = multer({
   fileFilter: (req, file, cb) => {
     const isPdfMime = file.mimetype === "application/pdf";
     const isPdfName = /\.pdf$/i.test(file.originalname || "");
-    if (isPdfMime || isPdfName) {
+    if (isPdfMime && isPdfName) {
       return cb(null, true);
     }
     return cb(new Error("Only PDF files are allowed"));
@@ -82,7 +91,12 @@ router.post(
   contractController.submitContractSignature
 );
 router.get("/", authenticateToken, contractController.getAllContracts);
-router.post("/", publicCreateContractLimiter, contractController.createContract);
+router.post(
+  "/",
+  publicCreateContractLimiter,
+  publicCreateContractSlowDown,
+  contractController.createContract,
+);
 router.post("/generate-pdf/:id", authenticateToken, contractController.generateContract);
 router.post(
   "/:id/upload-contract",

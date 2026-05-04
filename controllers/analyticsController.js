@@ -129,6 +129,23 @@ exports.trackVisit = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    if (typeof session_id !== "string" || !/^[a-zA-Z0-9_-]{8,128}$/.test(session_id)) {
+      return res.status(400).json({ error: "Invalid session_id" });
+    }
+    if (typeof page_url !== "string" || page_url.length > 2048) {
+      return res.status(400).json({ error: "Invalid page_url" });
+    }
+    const dur = Number(duration_seconds);
+    if (!Number.isFinite(dur) || dur < 0 || dur > 86400) {
+      return res.status(400).json({ error: "Invalid duration_seconds" });
+    }
+    if (referrer != null && typeof referrer === "string" && referrer.length > 2048) {
+      return res.status(400).json({ error: "Invalid referrer" });
+    }
+    if (campaign != null && typeof campaign === "string" && campaign.length > 256) {
+      return res.status(400).json({ error: "Invalid campaign" });
+    }
+
     // Get IP address
     const clientIp = requestIp.getClientIp(req) || req.ip || '127.0.0.1';
 
@@ -141,10 +158,10 @@ exports.trackVisit = async (req, res) => {
       session_id,
       ip_address: clientIp,
       country,
-      referrer,
-      campaign,
+      referrer: referrer || null,
+      campaign: campaign || null,
       page_url,
-      duration_seconds,
+      duration_seconds: dur,
       visited_at: new Date()
     });
 

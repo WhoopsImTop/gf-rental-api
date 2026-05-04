@@ -1,5 +1,9 @@
 const jwt = require("jsonwebtoken");
 
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET missing");
+}
+
 const secretKey = process.env.JWT_SECRET; // Sicher und privat halten
 const tokenExpiry = process.env.JWT_EXPIRATION || "1d";
 

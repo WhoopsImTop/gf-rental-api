@@ -11,11 +11,21 @@ const {
   collectUserDataFromCantamen,
 } = require("../../services/auth/cantamen");
 const { VerificationCode, PasswordResetCode } = require("../../models");
+const { normalizeCartAccessToken } = require("../../utils/cartAccessToken");
+const { logSecurityEvent } = require("../../services/audit/securityAudit");
 
 function extractIsoDate(value) {
   if (!value) return null;
   const match = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
   return match ? match[1] : null;
+}
+
+async function createUserSession(user) {
+  await Session.destroy({ where: { userId: user.id } });
+  const token = createToken({ userId: user.id, role: user.role });
+  const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
+  await Session.create({ userId: user.id, token, expiresAt });
+  return token;
 }
 
 exports.registerUser = async (req, res) => {
@@ -112,16 +122,23 @@ exports.verifyOtp = async (req, res) => {
     // Clean up used OTP (optional, or rely on expiration/cron)
     await verification.destroy();
 
-    if (!req.body.cartId) {
+    const accessToken = normalizeCartAccessToken(req.body.accessToken);
+    if (!accessToken) {
       return res.status(400).json({
         message:
           "Es wurde kein Warenkorb übermittelt. Bitte wähle ein Fahrzeug aus und konfiguriere dein Abo erneut.",
-        code: "CART_REQUIRED",
+        code: "ACCESS_TOKEN_REQUIRED",
       });
     }
 
-    const cartRow = await Cart.findByPk(req.body.cartId);
+    const cartRow = await Cart.findOne({ where: { accessToken } });
     if (!cartRow) {
+      logSecurityEvent({
+        req,
+        action: "verify_otp_cart",
+        outcome: "cart_not_found",
+        accessToken,
+      });
       return res.status(400).json({
         message:
           "Der Warenkorb wurde nicht gefunden oder ist nicht mehr gültig. Bitte starte die Buchung erneut.",
@@ -129,7 +146,25 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
-    await Cart.update({ userId: user.id }, { where: { id: req.body.cartId } });
+    if (cartRow.completed) {
+      return res.status(400).json({
+        message:
+          "Dieser Warenkorb ist bereits abgeschlossen. Bitte starte eine neue Konfiguration.",
+        code: "CART_COMPLETED",
+      });
+    }
+
+    await Cart.update({ userId: user.id }, { where: { accessToken } });
+
+    logSecurityEvent({
+      req,
+      action: "verify_otp_cart",
+      outcome: "ok",
+      accessToken,
+      extra: { userId: user.id },
+    });
+
+    const token = await createUserSession(user);
 
     res.json({
       user: {
@@ -140,6 +175,7 @@ exports.verifyOtp = async (req, res) => {
         phone: user.phone,
         role: user.role,
       },
+      token,
     });
   } catch (error) {
     console.error("Error verifying OTP:", error);
@@ -151,24 +187,52 @@ exports.loginUser = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    if (!email || !password) {
+      logSecurityEvent({
+        req,
+        action: "login",
+        outcome: "fail",
+        extra: { reason: "missing_credentials" },
+      });
+      return res.status(400).json({ message: "Invalid email or password" });
+    }
+
     const emailHash = createHash(email);
     // Benutzer anhand der Email suchen
     const user = await User.scope("withPassword").findOne({
       where: { emailHash },
     });
     if (!user) {
+      logSecurityEvent({
+        req,
+        action: "login",
+        outcome: "fail",
+        extra: { reason: "unknown_user" },
+      });
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
     // Passwort prüfen
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
+      logSecurityEvent({
+        req,
+        action: "login",
+        outcome: "fail",
+        extra: { reason: "bad_password", userId: user.id },
+      });
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
     // Wenn MFA aktiviert ist, temporären Token zurückgeben
     if (user.mfaEnabled) {
       const mfaToken = createToken({ userId: user.id, purpose: "mfa" });
+      logSecurityEvent({
+        req,
+        action: "login",
+        outcome: "ok",
+        extra: { step: "mfa_required", userId: user.id },
+      });
       return res.json({ mfaRequired: true, mfaToken });
     }
 
@@ -181,6 +245,13 @@ exports.loginUser = async (req, res) => {
     // Session in der Datenbank speichern
     const expiresAt = new Date(Date.now() + 24 * 3600 * 1000); // 24 Stunden
     await Session.create({ userId: user.id, token, expiresAt });
+
+    logSecurityEvent({
+      req,
+      action: "login",
+      outcome: "ok",
+      extra: { userId: user.id },
+    });
 
     res.json({
       user: {
@@ -195,6 +266,12 @@ exports.loginUser = async (req, res) => {
     });
   } catch (error) {
     console.error("Error during login:", error);
+    logSecurityEvent({
+      req,
+      action: "login",
+      outcome: "fail",
+      extra: { reason: "server_error" },
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -261,6 +338,8 @@ exports.resetPassword = async (req, res) => {
 
     // Clean up used code
     await resetCode.destroy();
+
+    await Session.destroy({ where: { userId: user.id } });
 
     res.json({ message: "Password reset successfully" });
   } catch (error) {
@@ -333,17 +412,35 @@ exports.verifyMfaLogin = async (req, res) => {
   try {
     const decoded = verifyToken(mfaToken);
     if (!decoded || decoded.purpose !== "mfa") {
+      logSecurityEvent({
+        req,
+        action: "verify_mfa_login",
+        outcome: "fail",
+        extra: { reason: "invalid_mfa_token" },
+      });
       return res.status(400).json({ message: "Invalid or expired MFA token" });
     }
 
     const user = await User.scope("withPassword").findByPk(decoded.userId);
     if (!user || !user.mfaEnabled || !user.mfaSecret) {
+      logSecurityEvent({
+        req,
+        action: "verify_mfa_login",
+        outcome: "fail",
+        extra: { reason: "mfa_not_configured", userId: decoded.userId },
+      });
       return res.status(400).json({ message: "MFA not configured" });
     }
 
     const isValid = verifyTotpCode(code, user.mfaSecret);
 
     if (!isValid) {
+      logSecurityEvent({
+        req,
+        action: "verify_mfa_login",
+        outcome: "fail",
+        extra: { reason: "bad_mfa_code", userId: user.id },
+      });
       return res.status(400).json({ message: "Invalid MFA code" });
     }
 
@@ -352,6 +449,13 @@ exports.verifyMfaLogin = async (req, res) => {
     const token = createToken({ userId: user.id, role: user.role });
     const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
     await Session.create({ userId: user.id, token, expiresAt });
+
+    logSecurityEvent({
+      req,
+      action: "verify_mfa_login",
+      outcome: "ok",
+      extra: { userId: user.id },
+    });
 
     res.json({
       user: {
@@ -366,6 +470,12 @@ exports.verifyMfaLogin = async (req, res) => {
     });
   } catch (error) {
     console.error("Error verifying MFA login:", error);
+    logSecurityEvent({
+      req,
+      action: "verify_mfa_login",
+      outcome: "fail",
+      extra: { reason: "server_error" },
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -387,6 +497,8 @@ exports.disableMfa = async (req, res) => {
     }
 
     await user.update({ mfaEnabled: false, mfaSecret: null });
+
+    await Session.destroy({ where: { userId: user.id } });
 
     res.json({ message: "MFA disabled successfully" });
   } catch (error) {
@@ -423,20 +535,35 @@ exports.cantamenAuth = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    if (!req.body.cartId) {
+    const accessToken = normalizeCartAccessToken(req.body.accessToken);
+    if (!accessToken) {
       return res.status(400).json({
         message:
           "Es wurde kein Warenkorb übermittelt. Bitte wähle ein Fahrzeug aus und konfiguriere dein Abo erneut.",
-        code: "CART_REQUIRED",
+        code: "ACCESS_TOKEN_REQUIRED",
       });
     }
 
-    const cartRow = await Cart.findByPk(req.body.cartId);
+    const cartRow = await Cart.findOne({ where: { accessToken } });
     if (!cartRow) {
+      logSecurityEvent({
+        req,
+        action: "cantamen_auth_cart",
+        outcome: "cart_not_found",
+        accessToken,
+      });
       return res.status(400).json({
         message:
           "Der Warenkorb wurde nicht gefunden oder ist nicht mehr gültig. Bitte starte die Buchung erneut.",
         code: "CART_NOT_FOUND",
+      });
+    }
+
+    if (cartRow.completed) {
+      return res.status(400).json({
+        message:
+          "Dieser Warenkorb ist bereits abgeschlossen. Bitte starte eine neue Konfiguration.",
+        code: "CART_COMPLETED",
       });
     }
 
@@ -472,8 +599,18 @@ exports.cantamenAuth = async (req, res) => {
 
     await Cart.update(
       { userId: user.id, syncedByCantamen: true },
-      { where: { id: req.body.cartId } },
+      { where: { accessToken } },
     );
+
+    logSecurityEvent({
+      req,
+      action: "cantamen_auth_cart",
+      outcome: "ok",
+      accessToken,
+      extra: { userId: user.id },
+    });
+
+    const token = await createUserSession(user);
 
     // 4. Response zurückgeben
     res.json({
@@ -504,6 +641,7 @@ exports.cantamenAuth = async (req, res) => {
         accountHolderName: sepaAccount?.accountHolder || null,
         sepaMandateReference: sepaMandateReference || null,
       },
+      token,
     });
   } catch (e) {
     res.status(500).json({ error: e.message || "Internal server error" });

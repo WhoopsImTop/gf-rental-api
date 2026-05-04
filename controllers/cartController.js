@@ -1,5 +1,7 @@
 const db = require("../models");
 const { logger } = require("../services/logging");
+const { logSecurityEvent } = require("../services/audit/securityAudit");
+const { normalizeCartAccessToken } = require("../utils/cartAccessToken");
 const DEPOSIT_STEP = 50;
 const MAX_DEPOSIT_CAP = 5000;
 const DEPOSIT_FEE_FACTOR = 1.025;
@@ -22,20 +24,47 @@ const normalizeDepositAmount = (
   return Math.round(clamped / DEPOSIT_STEP) * DEPOSIT_STEP;
 };
 
-exports.syncCart = async (req, res) => {
-  const { cartContent, userId } = req.body;
+/** Strip internal identifiers from API JSON (public cart). */
+function publicCartJson(cart) {
+  const j = cart.toJSON ? cart.toJSON() : { ...cart };
+  delete j.id;
+  delete j.userId;
+  return j;
+}
 
-  let cartId = req.body.cartId;
+exports.syncCart = async (req, res) => {
+  const { cartContent } = req.body;
+  const accessTokenIn = normalizeCartAccessToken(req.body.accessToken);
 
   try {
-    let cart;
-    if (cartId) {
-      cart = await db.Cart.findByPk(cartId);
+    let cart = null;
+    if (accessTokenIn) {
+      cart = await db.Cart.findOne({ where: { accessToken: accessTokenIn } });
+      if (!cart) {
+        logSecurityEvent({
+          req,
+          action: "cart_sync",
+          outcome: "token_not_found",
+          accessToken: accessTokenIn,
+        });
+        return res.status(404).json({
+          message:
+            "Der Warenkorb wurde nicht gefunden. Bitte konfiguriere dein Fahrzeug erneut.",
+        });
+      }
+      if (cart.completed) {
+        cart = null;
+      }
     }
 
-    // Logic to merge or create
-    let { carAboId, colorId, priceId, durationType, depositValue, calculatedMonthlyPrice } =
-      cartContent || {};
+    let {
+      carAboId,
+      colorId,
+      priceId,
+      durationType,
+      depositValue,
+      calculatedMonthlyPrice,
+    } = cartContent || {};
 
     if (!carAboId || !priceId) {
       return res.status(400).json({
@@ -44,15 +73,13 @@ exports.syncCart = async (req, res) => {
       });
     }
 
-    // Validate durationType
-    const validDurationType = durationType === 'minimum' ? 'minimum' : 'fixed';
+    const validDurationType = durationType === "minimum" ? "minimum" : "fixed";
 
-    //check if the calculatedMonthlyPrice from the client is correct
     const carAbo = await db.CarAbo.findByPk(carAboId, {
       include: [
         {
           model: db.CarAboPrice,
-          as: 'prices',
+          as: "prices",
           where: {
             id: priceId,
           },
@@ -63,7 +90,8 @@ exports.syncCart = async (req, res) => {
 
     if (!carAbo) {
       return res.status(400).json({
-        message: 'Das gewählte Fahrzeug wurde nicht gefunden. Bitte wähle es erneut aus.',
+        message:
+          "Das gewählte Fahrzeug wurde nicht gefunden. Bitte wähle es erneut aus.",
       });
     }
 
@@ -73,26 +101,33 @@ exports.syncCart = async (req, res) => {
     if (!selectedPrice) {
       return res.status(400).json({
         message:
-          'Die gewählte Preiskombination ist nicht mehr gültig. Bitte konfiguriere das Fahrzeug erneut.',
+          "Die gewählte Preiskombination ist nicht mehr gültig. Bitte konfiguriere das Fahrzeug erneut.",
       });
     }
 
-    // Determine base price based on durationType
-    const basePrice = validDurationType === 'minimum'
-      ? parseFloat(selectedPrice.priceMinimumDuration)
-      : parseFloat(selectedPrice.priceFixedDuration);
+    const basePrice =
+      validDurationType === "minimum"
+        ? parseFloat(selectedPrice.priceMinimumDuration)
+        : parseFloat(selectedPrice.priceFixedDuration);
     const durationMonthsInt = parseInt(selectedPrice.durationMonths, 10);
-    if (!Number.isFinite(basePrice) || basePrice <= 0 || !Number.isInteger(durationMonthsInt) || durationMonthsInt <= 0) {
+    if (
+      !Number.isFinite(basePrice) ||
+      basePrice <= 0 ||
+      !Number.isInteger(durationMonthsInt) ||
+      durationMonthsInt <= 0
+    ) {
       return res.status(400).json({
         message: "Ungültige Preisdaten. Bitte konfiguriere das Fahrzeug erneut.",
       });
     }
 
     const maxDepositByPrice =
-      (basePrice * durationMonthsInt - 0.01) /
-      DEPOSIT_FEE_FACTOR;
+      (basePrice * durationMonthsInt - 0.01) / DEPOSIT_FEE_FACTOR;
     const clampedDepositLimit = Math.min(maxDepositByPrice, MAX_DEPOSIT_CAP);
-    const maxAllowedDeposit = Math.max(0, floorToDepositStep(clampedDepositLimit));
+    const maxAllowedDeposit = Math.max(
+      0,
+      floorToDepositStep(clampedDepositLimit),
+    );
     const effectiveMinDeposit = Math.min(MIN_DEPOSIT, maxAllowedDeposit);
     const depositAmount = normalizeDepositAmount(
       depositValue,
@@ -101,19 +136,18 @@ exports.syncCart = async (req, res) => {
     );
     depositValue = depositAmount;
 
-    // Linear formula: reduce monthly price by deposit spread over duration
     let calculatedPrice = basePrice;
     if (depositAmount > 0) {
-      calculatedPrice = basePrice - ((depositAmount * 1.025) / durationMonthsInt);
+      calculatedPrice =
+        basePrice - (depositAmount * 1.025) / durationMonthsInt;
     }
 
-    // Ensure monthly price stays positive
     if (calculatedPrice <= 0) {
       return res.status(400).json({
         message:
-          'Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein.',
+          "Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein.",
         error:
-          'Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein.',
+          "Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein.",
       });
     }
 
@@ -124,31 +158,21 @@ exports.syncCart = async (req, res) => {
     }
 
     if (cart) {
-      if (cart.completed) {
-        // Create new if old is completed
-        cart = await db.Cart.create({
-          userId: userId || null,
-          carAboId,
-          colorId,
-          priceId,
-          durationType: validDurationType,
-          depositValue,
-          calculatedMonthlyPrice,
-        });
-      } else {
-        // Update existing
-        cart.userId = userId || cart.userId;
-        cart.carAboId = carAboId;
-        cart.colorId = colorId;
-        cart.priceId = priceId;
-        cart.durationType = validDurationType;
-        cart.depositValue = depositValue;
-        cart.calculatedMonthlyPrice = calculatedMonthlyPrice;
-        await cart.save();
-      }
+      cart.carAboId = carAboId;
+      cart.colorId = colorId;
+      cart.priceId = priceId;
+      cart.durationType = validDurationType;
+      cart.depositValue = depositValue;
+      cart.calculatedMonthlyPrice = calculatedMonthlyPrice;
+      await cart.save();
+      logSecurityEvent({
+        req,
+        action: "cart_sync",
+        outcome: "updated",
+        accessToken: cart.accessToken,
+      });
     } else {
       cart = await db.Cart.create({
-        userId: userId || null,
         carAboId,
         colorId,
         priceId,
@@ -156,20 +180,40 @@ exports.syncCart = async (req, res) => {
         depositValue,
         calculatedMonthlyPrice,
       });
+      logSecurityEvent({
+        req,
+        action: "cart_sync",
+        outcome: "created",
+        accessToken: cart.accessToken,
+      });
     }
 
-    return res.json(cart);
+    return res.json(publicCartJson(cart));
   } catch (error) {
     logger("error", `[syncCart] ${error.message}`);
+    logSecurityEvent({
+      req,
+      action: "cart_sync",
+      outcome: "error",
+      extra: { message: error.message },
+    });
     return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
 
 exports.getCart = async (req, res) => {
   try {
-    const { id } = req.params;
+    const accessToken = normalizeCartAccessToken(req.params.accessToken);
+    if (!accessToken) {
+      return res.status(404).json({
+        message:
+          "Der Warenkorb wurde nicht gefunden. Bitte konfiguriere dein Fahrzeug erneut.",
+        error: "Cart not found",
+      });
+    }
+
     const cart = await db.Cart.findOne({
-      where: { id },
+      where: { accessToken },
       include: [
         {
           model: db.CarAbo,
@@ -203,19 +247,21 @@ exports.getCart = async (req, res) => {
       });
     }
 
-    // Find the selected color and price
     let selectedColor = null;
     let selectedPrice = null;
 
     if (cart.colorId && cart.car && cart.car.colors) {
-      selectedColor = cart.car.colors.find(color => color.id === cart.colorId);
+      selectedColor = cart.car.colors.find(
+        (color) => color.id === cart.colorId,
+      );
     }
 
     if (cart.priceId && cart.car && cart.car.prices) {
-      selectedPrice = cart.car.prices.find(price => price.id === cart.priceId);
+      selectedPrice = cart.car.prices.find(
+        (price) => price.id === cart.priceId,
+      );
     }
 
-    // Look up associated contract (for completed carts / confirmation page)
     let contract = null;
     if (cart.completed) {
       contract = await db.Contract.findOne({
@@ -225,17 +271,34 @@ exports.getCart = async (req, res) => {
           priceId: cart.priceId,
           userId: cart.userId,
         },
-        attributes: ["monthlyPrice", "insuranceType", "insuranceCosts", "insurancePackage", "deliveryCosts", "depositValue"],
-        order: [['createdAt', 'DESC']],
+        attributes: [
+          "monthlyPrice",
+          "insuranceType",
+          "insuranceCosts",
+          "insurancePackage",
+          "deliveryCosts",
+          "depositValue",
+        ],
+        order: [["createdAt", "DESC"]],
       });
     }
-    // Build response with selected items
+
+    const base = publicCartJson(cart);
     const response = {
-      ...cart.toJSON(),
+      ...base,
+      accessToken: cart.accessToken,
+      hasVerifiedUser: Boolean(cart.userId),
       selectedColor,
       selectedPrice,
       contract: contract ? contract.toJSON() : null,
     };
+
+    logSecurityEvent({
+      req,
+      action: "cart_get",
+      outcome: "ok",
+      accessToken: cart.accessToken,
+    });
 
     return res.json(response);
   } catch (error) {

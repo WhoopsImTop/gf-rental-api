@@ -7,7 +7,7 @@ exports.getCrmUsers = async (req, res) => {
     const users = await db.User.findAll({
       where: {
         role: {
-          [Op.in]: ["customer", "admin", "seller"],
+          [Op.in]: ["CUSTOMER", "ADMIN", "SELLER"],
         },
       },
     });
@@ -28,6 +28,12 @@ exports.updateCrmUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    if (role !== undefined && req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Only administrators can change user roles" });
+    }
+
+    const previousRole = user.role;
+
     const updateData = {};
     if (firstName !== undefined) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
@@ -40,6 +46,10 @@ exports.updateCrmUser = async (req, res) => {
     }
 
     await user.update(updateData);
+
+    if (role !== undefined && role !== previousRole) {
+      await db.Session.destroy({ where: { userId: id } });
+    }
 
     return res.status(200).json({ message: "User updated successfully" });
   } catch (error) {
