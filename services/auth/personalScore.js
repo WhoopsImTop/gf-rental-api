@@ -12,7 +12,7 @@ async function getUserScore(firstName, lastName, birthday, street, zipCode, city
 
 	const formattedBirthday = `${day}.${month}.${year}`;
 
-    /* const response = await fetch(url, {
+    const response = await fetch(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -41,10 +41,8 @@ async function getUserScore(firstName, lastName, birthday, street, zipCode, city
         throw new Error(`Schufa Prüfung fehlgeschlagen: ${response.status}`);
     }
 
-    logger('error', `Schufa Prüfung erfolgreich: ${score}, Bestellnummer: ${firstName}`); */
-
-    score = "A";
-
+    logger('error', `Schufa Prüfung erfolgreich: ${score}, Bestellnummer: ${firstName}`);
+    
     return { score };
 }
 

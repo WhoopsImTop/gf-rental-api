@@ -20,7 +20,6 @@ async function authenticateToken(req, res, next) {
     // 1️⃣ JWT prüfen
     const decoded = verifyToken(token);
     if (!decoded) {
-      logger("error", "Invalid or expired token");
       logSecurityEvent({
         req,
         action: "auth_jwt",

@@ -70,7 +70,7 @@ const corsOptions = {
       return callback(new Error("Invalid Origin"));
     }
   },
-  credentials: false,
+  credentials: true,
   methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], // Erlaubte HTTP-Methoden
   allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
 };
