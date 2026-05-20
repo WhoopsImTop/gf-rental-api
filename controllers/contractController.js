@@ -311,6 +311,13 @@ exports.createContract = async (req, res) => {
         ? new Date(customerDetails.licenseValidUntil)
         : null;
 
+      const rawCompanyName =
+        typeof customerDetails.companyName === "string"
+          ? customerDetails.companyName.trim()
+          : "";
+      const companyName =
+        rawCompanyName.length > 0 ? rawCompanyName.slice(0, 200) : null;
+
       const detailsPayload = {
         userId,
         birthday: customerDetails.birthday,
@@ -331,6 +338,7 @@ exports.createContract = async (req, res) => {
         licenseIssuingPlace: customerDetails.licenseIssuingPlace,
         licenseIssuedOn: licenseIssuedOn,
         placeOfBirth: customerDetails.placeOfBirth,
+        companyName,
       };
 
       if (details) {
@@ -562,6 +570,11 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
         <tbody>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.firstName)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.lastName)}</td></tr>
+          ${
+            user.customerDetails.companyName
+              ? `<tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Firmenname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.companyName)}</td></tr>`
+              : ""
+          }
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.street)} ${escapeHtml(
             user.customerDetails.housenumber,
           )}</td></tr>

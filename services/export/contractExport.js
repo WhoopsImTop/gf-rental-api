@@ -4,10 +4,17 @@ const path = require("path");
 
 async function generateContractPdf(contractInstance, options = {}) {
   try {
+    const companyName =
+      contractInstance.User?.customerDetails?.companyName?.trim() || "";
+
     // 1. Pfade definieren
+    const defaultTemplateFile = companyName
+      ? "Mietvertrag_Firma_vorlage.pdf"
+      : "Mietvertrag_vorlage.pdf";
     const defaultTemplatePath = path.join(
       __dirname,
-      "../../templates/contract/Mietvertrag_vorlage.pdf",
+      "../../templates/contract",
+      defaultTemplateFile,
     );
     const outputDir = path.join(__dirname, "../../internal-files/contracts");
     const sourceFileName = options.sourceFileName
@@ -28,8 +35,11 @@ async function generateContractPdf(contractInstance, options = {}) {
     }
 
     if (!fs.existsSync(templatePath)) {
+      const hint = companyName
+        ? " Bitte Mietvertrag_Firma_vorlage.pdf im Ordner templates/contract bereitstellen."
+        : "";
       throw new Error(
-        "PDF-Template wurde nicht gefunden unter: " + templatePath,
+        "PDF-Template wurde nicht gefunden unter: " + templatePath + "." + hint,
       );
     }
 
@@ -93,6 +103,7 @@ async function generateContractPdf(contractInstance, options = {}) {
       cantamenKundennummer: contractInstance.User?.cantamenCustomerId || "",
 
       // Mieter Informationen [cite: 11-20]
+      companyName,
       vornameNachname: `${contractInstance.User?.firstName || ""} ${contractInstance.User?.lastName || ""}`,
       mandatsreferenzNummer: contractInstance.mandateReference || "",
       iban: contractInstance.iban || "",

@@ -61,6 +61,11 @@ exports.orderAdminNotification = async (id) => {
       }</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.lastName)
       }</td></tr>
+          ${
+            user.customerDetails.companyName
+              ? `<tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Firmenname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.companyName)}</td></tr>`
+              : ""
+          }
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.street)
       } ${escapeHtml(user.customerDetails.housenumber)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">PLZ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.postalCode)

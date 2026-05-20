@@ -157,6 +157,21 @@ module.exports = (sequelize, DataTypes) => {
           return value ? decrypt(value) : null;
         },
       },
+      companyName: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        set(value) {
+          if (value == null || value === "") {
+            this.setDataValue("companyName", null);
+            return;
+          }
+          this.setDataValue("companyName", encrypt(String(value).trim()));
+        },
+        get() {
+          const value = this.getDataValue("companyName");
+          return value ? decrypt(value) : null;
+        },
+      },
     },
     {
       sequelize,

@@ -78,7 +78,6 @@ const corsOptions = {
 // Middleware
 // Wende CORS auf statische Dateien an
 app.use("/public", cors(corsOptions), express.static("public"));
-app.use("/uploads", cors(corsOptions), express.static("public/uploads"));
 
 // Weitere Routen und Middleware
 app.use(cors(corsOptions)); // Gilt für die anderen Routen
