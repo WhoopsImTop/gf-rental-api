@@ -26,6 +26,8 @@ const sitemapRoute = require("./routes/website/sitemapRoute");
 const reviewRoute = require("./routes/website/reviewRoute");
 const contractRoute = require("./routes/contractRoute");
 const analyticsRoute = require("./routes/analyticsRoute");
+const feedbackPublicRoute = require("./routes/feedback/public");
+const feedbackAdminRoute = require("./routes/feedback/admin");
 
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
 const { authenticateToken } = require("./middleware/authMiddleware");
@@ -71,7 +73,7 @@ const corsOptions = {
     }
   },
   credentials: true,
-  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], // Erlaubte HTTP-Methoden
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], // Erlaubte HTTP-Methoden
   allowedHeaders: ["Content-Type", "Authorization"], // Erlaubte Header
 };
 
@@ -132,6 +134,9 @@ app.use("/api/reviews", reviewRoute);
 app.use("/api/analytics", analyticsRoute);
 app.use("/api/business/contact", contactRoute);
 app.use("/api/sitemap.xml", sitemapRoute);
+
+app.use("/api/feedback", feedbackPublicRoute);
+app.use("/api/admin/feedback", authenticateToken, feedbackAdminRoute);
 
 // Allgemeine Fehlerbehandlung
 app.use((err, req, res, next) => {
