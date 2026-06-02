@@ -16,7 +16,7 @@ const transporter = nodemailer.createTransport({
 
 exports.sendOtpEmail = async (email, code) => {
   if (!process.env.SMTP_HOST) {
-    console.log(`[DEV MODE] OTP for ${email}: ${code}`);
+    console.log("[DEV MODE] OTP generated");
     return;
   }
 
@@ -44,7 +44,7 @@ exports.sendOtpEmail = async (email, code) => {
 
 exports.sendPasswordResetEmail = async (email, code) => {
   if (!process.env.SMTP_HOST) {
-    console.log(`[DEV MODE] Password reset code for ${email}: ${code}`);
+    console.log("[DEV MODE] Password reset code generated");
     return;
   }
 

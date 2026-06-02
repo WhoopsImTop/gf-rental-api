@@ -23,10 +23,15 @@ const calculatePriceLimiter = rateLimit({
 router.post("/", authenticateToken, requireRole("ADMIN", "SELLER"), createCarAbo);
 router.post("/:id/calculate-price", calculatePriceLimiter, calculatePrice);
 router.get("/", findAllCarAbos);
-router.get("/admin", authenticateToken, findAllCarAboAdmin);
+router.get(
+  "/admin",
+  authenticateToken,
+  requireRole("ADMIN", "SELLER"),
+  findAllCarAboAdmin,
+);
 router.get("/available", findAvailableCarAbos);
 router.get("/:id", findOneCarAbo);
-router.patch("/:id", authenticateToken, updateCarAbo);
-router.delete("/:id", authenticateToken, deleteCarAbo);
+router.patch("/:id", authenticateToken, requireRole("ADMIN", "SELLER"), updateCarAbo);
+router.delete("/:id", authenticateToken, requireRole("ADMIN", "SELLER"), deleteCarAbo);
 
 module.exports = router;

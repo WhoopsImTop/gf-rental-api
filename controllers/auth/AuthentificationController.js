@@ -14,6 +14,24 @@ const { VerificationCode, PasswordResetCode } = require("../../models");
 const { normalizeCartAccessToken } = require("../../utils/cartAccessToken");
 const { logSecurityEvent } = require("../../services/audit/securityAudit");
 
+const AUTH_COOKIE_NAME = "gf_crm_session";
+const isProduction = process.env.NODE_ENV === "production";
+const authCookieConfig = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: "strict",
+  path: "/",
+  maxAge: 24 * 60 * 60 * 1000,
+};
+
+function setAuthCookie(res, token) {
+  res.cookie(AUTH_COOKIE_NAME, token, authCookieConfig);
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie(AUTH_COOKIE_NAME, { ...authCookieConfig, maxAge: undefined });
+}
+
 function extractIsoDate(value) {
   if (!value) return null;
   const match = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
@@ -166,6 +184,7 @@ exports.verifyOtp = async (req, res) => {
 
     const token = await createUserSession(user);
 
+    setAuthCookie(res, token);
     res.json({
       user: {
         id: user.id,
@@ -179,7 +198,7 @@ exports.verifyOtp = async (req, res) => {
     });
   } catch (error) {
     console.error("Error verifying OTP:", error);
-    res.status(500).json({ message: "Internal server error", error: error });
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -253,6 +272,7 @@ exports.loginUser = async (req, res) => {
       extra: { userId: user.id },
     });
 
+    setAuthCookie(res, token);
     res.json({
       user: {
         id: user.id,
@@ -457,6 +477,7 @@ exports.verifyMfaLogin = async (req, res) => {
       extra: { userId: user.id },
     });
 
+    setAuthCookie(res, token);
     res.json({
       user: {
         id: user.id,
@@ -613,6 +634,7 @@ exports.cantamenAuth = async (req, res) => {
     const token = await createUserSession(user);
 
     // 4. Response zurückgeben
+    setAuthCookie(res, token);
     res.json({
       user: {
         id: user.id,
@@ -644,6 +666,42 @@ exports.cantamenAuth = async (req, res) => {
       token,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message || "Internal server error" });
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+exports.getCurrentUser = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: ["id", "firstName", "lastName", "role"],
+    });
+    if (!user) {
+      clearAuthCookie(res);
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    return res.json({ user });
+  } catch (error) {
+    console.error("Error getting current user:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+exports.logoutUser = async (req, res) => {
+  try {
+    const token =
+      req.headers.authorization?.split(" ")[1] ||
+      req.authToken ||
+      null;
+    if (token) {
+      await Session.destroy({ where: { token } });
+    } else if (req.user?.id) {
+      await Session.destroy({ where: { userId: req.user.id } });
+    }
+    clearAuthCookie(res);
+    return res.json({ message: "Logged out" });
+  } catch (error) {
+    console.error("Error during logout:", error);
+    clearAuthCookie(res);
+    return res.status(500).json({ message: "Internal server error" });
   }
 };

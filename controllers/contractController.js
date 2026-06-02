@@ -18,9 +18,13 @@ const { getUserScore } = require("../services/auth/personalScore");
 const { logSecurityEvent } = require("../services/audit/securityAudit");
 const { normalizeCartAccessToken } = require("../utils/cartAccessToken");
 const { escapeHtml } = require("../services/util/escapeHtml");
+const {
+  buildContractListWhere,
+  createGenericServerErrorResponse,
+} = require("../services/security/accessPolicy");
 
 const SIGN_LINK_VALIDITY_HOURS = 72;
-const SHARE_LINK_VALIDITY_HOURS = 168;
+const SHARE_LINK_VALIDITY_HOURS = 24;
 const SIGNATURE_MAX_BYTES = 1024 * 1024 * 2;
 
 const hashSignToken = (token) =>
@@ -176,9 +180,11 @@ function addDays(date, daysToAdd) {
 exports.getAllContracts = async (req, res) => {
   try {
     const contracts = await db.Contract.findAll({
+      where: buildContractListWhere(req.user),
       include: [
         {
           model: db.User,
+          attributes: ["id", "firstName", "lastName", "email", "phone", "role"],
           include: {
             model: db.CustomerDetails,
             as: "customerDetails",
@@ -215,10 +221,7 @@ exports.getAllContracts = async (req, res) => {
     });
   } catch (e) {
     console.error("Error creating contract:", e);
-    res.status(500).json({
-      message: "Internal server error",
-      error: e.message,
-    });
+    res.status(500).json(createGenericServerErrorResponse());
   }
 };
 
@@ -495,19 +498,6 @@ exports.createContract = async (req, res) => {
         });
 
         const colorUpdatePayload = { isOrdered: true };
-        const hasDynamicAvailability =
-          colorToUpdate &&
-          (colorToUpdate.availableFrom == null ||
-            colorToUpdate.availableFrom === "") &&
-          Number.isInteger(colorToUpdate.availableInDays) &&
-          colorToUpdate.availableInDays >= 0;
-
-        if (hasDynamicAvailability) {
-          colorUpdatePayload.availableFrom = addDays(
-            new Date(),
-            colorToUpdate.availableInDays,
-          );
-        }
 
         const [affectedRows] = await db.CarAboColor.update(colorUpdatePayload, {
           where: { id: colorId, isOrdered: false },
@@ -768,10 +758,7 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
     }
 
     logger("error", "Error creating contract" + error);
-    res.status(500).json({
-      message: "Internal server error",
-      error: error.message,
-    });
+    res.status(500).json(createGenericServerErrorResponse());
   }
 };
 
@@ -807,8 +794,7 @@ exports.archiveContract = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Internal server error",
-      error: error.message,
+      ...createGenericServerErrorResponse(),
     });
   }
 };
@@ -864,7 +850,6 @@ exports.generateContract = async (req, res) => {
   } catch (err) {
     res.status(500).json({
       error: "PDF konnte nicht erstellt werden",
-      errorMessage: err,
     });
   }
 };
@@ -967,7 +952,6 @@ exports.uploadContractFile = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Interner Serverfehler",
-      error: error.message,
     });
   }
 };
@@ -1053,6 +1037,11 @@ exports.shareContractFile = async (req, res) => {
     }
 
     const activeFile = resolveActiveContractFileName(contract);
+    await contract.update({
+      shareTokenHash: null,
+      shareRequestedAt: null,
+      shareExpiresAt: null,
+    });
     return sendContractFileByName(res, activeFile);
   } catch (error) {
     console.error("Download Error:", error);
@@ -1102,6 +1091,33 @@ exports.issueContractShareLink = async (req, res) => {
       success: false,
       message: "Interner Serverfehler",
       error: error.message,
+    });
+  }
+};
+
+exports.revokeContractShareLink = async (req, res) => {
+  const id = req.params.id;
+  try {
+    const contract = await db.Contract.findByPk(id);
+    if (!contract) {
+      return res.status(404).json({ success: false, message: "Contract not found" });
+    }
+    if (!canManageContract(contract, req.user)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+    await contract.update({
+      shareTokenHash: null,
+      shareRequestedAt: null,
+      shareExpiresAt: null,
+    });
+    return res.status(200).json({
+      success: true,
+      message: "Freigabelink wurde widerrufen.",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler",
     });
   }
 };
@@ -1201,7 +1217,6 @@ exports.issueContractSignLink = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Interner Serverfehler",
-      error: error.message,
     });
   }
 };
@@ -1257,7 +1272,6 @@ exports.getSignContractByToken = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Interner Serverfehler",
-      error: error.message,
     });
   }
 };
@@ -1292,7 +1306,6 @@ exports.getSignContractPreviewByToken = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Interner Serverfehler",
-      error: error.message,
     });
   }
 };
@@ -1377,7 +1390,6 @@ exports.submitContractSignature = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Interner Serverfehler",
-      error: error.message,
     });
   }
 };
@@ -1405,7 +1417,6 @@ exports.deleteContract = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: "Internal server error",
-      error: error.message,
     });
   }
 };

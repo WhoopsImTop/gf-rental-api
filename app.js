@@ -28,6 +28,7 @@ const contractRoute = require("./routes/contractRoute");
 const analyticsRoute = require("./routes/analyticsRoute");
 const feedbackPublicRoute = require("./routes/feedback/public");
 const feedbackAdminRoute = require("./routes/feedback/admin");
+const { requireRole } = require("./middleware/requireRole");
 
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
 const { authenticateToken } = require("./middleware/authMiddleware");
@@ -136,7 +137,12 @@ app.use("/api/business/contact", contactRoute);
 app.use("/api/sitemap.xml", sitemapRoute);
 
 app.use("/api/feedback", feedbackPublicRoute);
-app.use("/api/admin/feedback", authenticateToken, feedbackAdminRoute);
+app.use(
+  "/api/admin/feedback",
+  authenticateToken,
+  requireRole("ADMIN", "SELLER"),
+  feedbackAdminRoute,
+);
 
 // Allgemeine Fehlerbehandlung
 app.use((err, req, res, next) => {

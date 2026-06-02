@@ -22,6 +22,8 @@ const {
   verifyMfaLogin,
   disableMfa,
   getMfaStatus,
+  getCurrentUser,
+  logoutUser,
 } = require("../../controllers/auth/AuthentificationController");
 
 router.post("/register", registerUser);
@@ -39,6 +41,8 @@ router.post("/reset-password", ...resetPasswordLimits, resetPassword);
 
 // MFA login verification (public — uses mfaToken)
 router.post("/verify-mfa-login", ...verifyMfaLoginLimits, verifyMfaLogin);
+router.get("/me", authenticateToken, getCurrentUser);
+router.post("/logout", authenticateToken, logoutUser);
 
 // MFA setup/management (protected)
 router.get("/mfa/status", authenticateToken, getMfaStatus);

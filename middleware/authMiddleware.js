@@ -3,10 +3,24 @@ const db = require("../models");
 const { logger } = require("../services/logging");
 const { logSecurityEvent } = require("../services/audit/securityAudit");
 
+function getCookieValue(cookieHeader, key) {
+  if (!cookieHeader || typeof cookieHeader !== "string") return null;
+  const cookies = cookieHeader.split(";");
+  for (const cookie of cookies) {
+    const [rawName, ...rawValueParts] = cookie.trim().split("=");
+    if (rawName === key) {
+      return decodeURIComponent(rawValueParts.join("="));
+    }
+  }
+  return null;
+}
+
 async function authenticateToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.split(" ")[1];
+    const bearerToken = authHeader?.split(" ")[1];
+    const cookieToken = getCookieValue(req.headers.cookie, "gf_crm_session");
+    const token = bearerToken || cookieToken;
 
     if (!token) {
       logSecurityEvent({
@@ -65,6 +79,7 @@ async function authenticateToken(req, res, next) {
     }
 
     // 4️⃣ User an Request anhängen
+    req.authToken = token;
     req.user = user;
     next();
   } catch (err) {

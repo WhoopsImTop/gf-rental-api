@@ -75,6 +75,11 @@ router.post(
   authenticateToken,
   contractController.issueContractShareLink
 );
+router.post(
+  "/:id/share-link/revoke",
+  authenticateToken,
+  contractController.revokeContractShareLink
+);
 router.get(
   "/sign/public/:token",
   publicSignLimiter,
