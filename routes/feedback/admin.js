@@ -444,6 +444,28 @@ router.patch("/sessions/:id", async (req, res) => {
   }
 });
 
+router.delete("/sessions/:id", async (req, res) => {
+  try {
+    const session = await FeedbackSession.findByPk(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: "Session nicht gefunden." });
+    }
+
+    await sequelize.transaction(async (t) => {
+      await FeedbackAnswer.destroy({
+        where: { session_id: session.id },
+        transaction: t,
+      });
+      await session.destroy({ transaction: t });
+    });
+
+    return res.json({ deleted: true });
+  } catch (err) {
+    console.error("[feedback/admin] DELETE /sessions/:id:", err);
+    return res.status(500).json({ error: "Interner Serverfehler" });
+  }
+});
+
 router.get("/surveys/:id/stats", async (req, res) => {
   try {
     const survey = await getSurveyOr404(req.params.id, res);
