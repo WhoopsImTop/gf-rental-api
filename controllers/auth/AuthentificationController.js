@@ -594,6 +594,11 @@ exports.cantamenAuth = async (req, res) => {
       authData.id
     );
 
+    const isCompanyCustomer = userData.gender === "COMPANY";
+    const phone = isCompanyCustomer
+      ? userData.phoneNr || userData.mobilePhoneNr
+      : userData.mobilePhoneNr || userData.phoneNr;
+
     // 1. Prüfen ob User existiert
     const emailHash = createHash(userData.emailAddress);
     let user = await User.scope("withPassword").findOne({
@@ -607,19 +612,31 @@ exports.cantamenAuth = async (req, res) => {
         firstName: userData.prename,
         lastName: userData.name,
         email: userData.emailAddress,
-        phone: userData.mobilePhoneNr,
+        phone,
         cantamenCustomerId: userData.customerNumber,
         emailHash: emailHash,
         passwordHash: hashedPassword,
         role: "CUSTOMER",
       });
-    } else if (!user.cantamenCustomerId && userData.customerNumber) {
-      //update customer
-      await user.update({ cantamenCustomerId: userData.customerNumber });
+    } else {
+      const userUpdates = {};
+      if (!user.cantamenCustomerId && userData.customerNumber) {
+        userUpdates.cantamenCustomerId = userData.customerNumber;
+      }
+      if (phone && user.phone !== phone) {
+        userUpdates.phone = phone;
+      }
+      if (Object.keys(userUpdates).length > 0) {
+        await user.update(userUpdates);
+      }
     }
 
     await Cart.update(
-      { userId: user.id, syncedByCantamen: true },
+      {
+        userId: user.id,
+        syncedByCantamen: true,
+        ...(isCompanyCustomer ? { customerType: "business" } : {}),
+      },
       { where: { accessToken } },
     );
 
@@ -643,6 +660,9 @@ exports.cantamenAuth = async (req, res) => {
         email: user.email,
         phone: user.phone,
         role: user.role,
+        gender: userData.gender,
+        customerType: isCompanyCustomer ? "business" : "private",
+        companyName: isCompanyCustomer ? userData.prename : null,
         birthday: extractIsoDate(userData.birthDate),
         birthPlace: userData.birthPlace,
         street: userData.address?.street,

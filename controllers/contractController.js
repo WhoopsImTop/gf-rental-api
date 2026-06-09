@@ -15,7 +15,6 @@ const {
   contractSignedAdminNotification,
 } = require("../services/notification/order");
 const { getUserScore } = require("../services/auth/personalScore");
-const { syncCustomerFromOrder } = require("../services/crm/syncCustomerFromOrder");
 const { logSecurityEvent } = require("../services/audit/securityAudit");
 const { normalizeCartAccessToken } = require("../utils/cartAccessToken");
 const { escapeHtml } = require("../services/util/escapeHtml");
@@ -676,14 +675,6 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
           "error",
           "Email konnte nicht versendet werden für Contract: #" + contract.id,
         );
-      }
-
-      if (isBusiness) {
-        await syncCustomerFromOrder({
-          user,
-          customerDetails: user.customerDetails,
-          transaction,
-        });
       }
 
       return contract;
