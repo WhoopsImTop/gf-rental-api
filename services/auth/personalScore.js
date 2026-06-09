@@ -4,7 +4,7 @@ async function getUserScore(firstName, lastName, birthday, street, zipCode, city
     const url = process.env.PERSONAL_SCORE_URL;
 
     //birthday must be formed dd.mm.yyyy
-    /* const date = new Date(birthday);
+    const date = new Date(birthday);
 
 	const day = String(date.getUTCDate()).padStart(2, '0');
 	const month = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -39,9 +39,7 @@ async function getUserScore(firstName, lastName, birthday, street, zipCode, city
     if (!score) {
         logger("error", `Schufa Prüfung fehlgeschlagen: ${response.status}`);
         throw new Error(`Schufa Prüfung fehlgeschlagen: ${response.status}`);
-    } */
-
-    const score = "A"
+    }
 
     logger('error', `Schufa Prüfung erfolgreich: ${score}, Bestellnummer: ${firstName}`);
     
