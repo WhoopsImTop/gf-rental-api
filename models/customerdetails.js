@@ -21,7 +21,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       birthday: {
         type: DataTypes.DATE,
-        allowNull: false,
+        allowNull: true,
       },
       street: {
         type: DataTypes.STRING,
@@ -96,7 +96,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       driversLicenseNumber: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
         set(value) {
           this.setDataValue("driversLicenseNumber", encrypt(value));
         },
@@ -107,7 +107,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       IdCardNumber: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
         set(value) {
           this.setDataValue("IdCardNumber", encrypt(value));
         },
@@ -118,7 +118,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       allowedLicenseClasses: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
         set(value) {
           this.setDataValue("allowedLicenseClasses", encrypt(value));
         },
@@ -129,11 +129,11 @@ module.exports = (sequelize, DataTypes) => {
       },
       licenseValidUntil: {
         type: DataTypes.DATE,
-        allowNull: false,
+        allowNull: true,
       },
       licenseIssuingPlace: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
         set(value) {
           this.setDataValue("licenseIssuingPlace", encrypt(value));
         },
@@ -144,11 +144,11 @@ module.exports = (sequelize, DataTypes) => {
       },
       licenseIssuedOn: {
         type: DataTypes.DATE,
-        allowNull: false,
+        allowNull: true,
       },
       placeOfBirth: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
         set(value) {
           this.setDataValue("placeOfBirth", encrypt(value));
         },

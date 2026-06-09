@@ -15,6 +15,7 @@ const {
   contractSignedAdminNotification,
 } = require("../services/notification/order");
 const { getUserScore } = require("../services/auth/personalScore");
+const { syncCustomerFromOrder } = require("../services/crm/syncCustomerFromOrder");
 const { logSecurityEvent } = require("../services/audit/securityAudit");
 const { normalizeCartAccessToken } = require("../utils/cartAccessToken");
 const { escapeHtml } = require("../services/util/escapeHtml");
@@ -184,7 +185,7 @@ exports.getAllContracts = async (req, res) => {
       include: [
         {
           model: db.User,
-          attributes: ["id", "firstName", "lastName", "email", "phone", "role"],
+          attributes: ["id", "firstName", "lastName", "email", "phone", "role", "cantamenCustomerId"],
           include: {
             model: db.CustomerDetails,
             as: "customerDetails",
@@ -301,6 +302,9 @@ exports.createContract = async (req, res) => {
       const userId = Cart.userId;
       const colorId = Cart.colorId;
       const carAboId = Cart.carAboId;
+      const isBusiness =
+        Cart.customerType === "business" ||
+        customerDetails.customerType === "business";
 
       let details = await db.CustomerDetails.findOne({
         where: { userId },
@@ -321,26 +325,47 @@ exports.createContract = async (req, res) => {
       const companyName =
         rawCompanyName.length > 0 ? rawCompanyName.slice(0, 200) : null;
 
+      if (isBusiness && !companyName) {
+        throw new Error("BUSINESS_COMPANY_NAME_REQUIRED");
+      }
+
       const detailsPayload = {
         userId,
-        birthday: customerDetails.birthday,
+        birthday: isBusiness
+          ? customerDetails.birthday || null
+          : customerDetails.birthday,
         street: customerDetails.street || "",
         housenumber: customerDetails.housenumber,
         postalCode: customerDetails.postalCode,
         city: customerDetails.city,
         country: customerDetails.country || "Deutschland",
         newsletter: customerDetails.newsletter || false,
-        allowsCreditworthyCheck:
-          customerDetails.allowsCreditworthyCheck || true,
+        allowsCreditworthyCheck: isBusiness
+          ? false
+          : customerDetails.allowsCreditworthyCheck || true,
         allowedToPurchase: customerDetails.allowedToPurchase || true,
         acceptPrivacyPolicy: customerDetails.acceptPrivacyPolicy || true,
-        driversLicenseNumber: customerDetails.driversLicenseNumber,
-        IdCardNumber: customerDetails.IdCardNumber,
-        allowedLicenseClasses: customerDetails.allowedLicenseClasses,
-        licenseValidUntil: licenseValidUntil,
-        licenseIssuingPlace: customerDetails.licenseIssuingPlace,
-        licenseIssuedOn: licenseIssuedOn,
-        placeOfBirth: customerDetails.placeOfBirth,
+        driversLicenseNumber: isBusiness
+          ? customerDetails.driversLicenseNumber || null
+          : customerDetails.driversLicenseNumber,
+        IdCardNumber: isBusiness
+          ? customerDetails.IdCardNumber || null
+          : customerDetails.IdCardNumber,
+        allowedLicenseClasses: isBusiness
+          ? customerDetails.allowedLicenseClasses || null
+          : customerDetails.allowedLicenseClasses,
+        licenseValidUntil: isBusiness
+          ? licenseValidUntil || null
+          : licenseValidUntil,
+        licenseIssuingPlace: isBusiness
+          ? customerDetails.licenseIssuingPlace || null
+          : customerDetails.licenseIssuingPlace,
+        licenseIssuedOn: isBusiness
+          ? licenseIssuedOn || null
+          : licenseIssuedOn,
+        placeOfBirth: isBusiness
+          ? customerDetails.placeOfBirth || null
+          : customerDetails.placeOfBirth,
         companyName,
       };
 
@@ -370,7 +395,9 @@ exports.createContract = async (req, res) => {
       }
 
       let userScore = { score: "Kein Score vorhanden" };
-      if (!Cart.syncedByCantamen) {
+      if (isBusiness) {
+        userScore = { score: "Manuelle Prüfung ausstehend" };
+      } else if (!Cart.syncedByCantamen) {
         const settings = await db.Setting.findOne({ transaction });
         if (!settings || settings.allowedScore == null) {
           throw new Error("SETTINGS_ALLOWED_SCORE_MISSING");
@@ -478,6 +505,7 @@ exports.createContract = async (req, res) => {
           depositValue: Cart.depositValue,
           calculatedMonthlyPrice: Cart.calculatedMonthlyPrice,
           syncedByCantamen: syncedByCantamen,
+          customerType: isBusiness ? "business" : "private",
           score: userScore.score || "Kein Score vorhanden",
           lat: lat,
           lng: lon,
@@ -550,6 +578,7 @@ exports.createContract = async (req, res) => {
       }
       const previewImageUrl = autoAbo?.colors?.[0]?.media?.url || "";
 
+      const isBusinessOrder = isBusiness;
       const emailContent = `
 ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" height="auto"/>` : ""}
 <p>Guten Tag ${escapeHtml(user.firstName)} ${escapeHtml(user.lastName)},</p>
@@ -558,12 +587,12 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Ihre Daten</h2>
       <table style="width: 100%; border: 1px solid #efefef;">
         <tbody>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.firstName)}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.lastName)}</td></tr>
           ${
-            user.customerDetails.companyName
-              ? `<tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Firmenname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.companyName)}</td></tr>`
-              : ""
+            isBusinessOrder
+              ? `<tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Unternehmensname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.companyName || "")}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Ansprechpartner</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.firstName)} ${escapeHtml(user.lastName)}</td></tr>`
+              : `<tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vorname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.firstName)}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Nachname</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.lastName)}</td></tr>`
           }
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Straße</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.customerDetails.street)} ${escapeHtml(
             user.customerDetails.housenumber,
@@ -588,12 +617,20 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Kilometerleistung</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${
             selectedPrice.mileageKm
           }km</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Führerscheinnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(
-            user.customerDetails.driversLicenseNumber,
-          )}</td></tr>
-          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(
-            user.customerDetails.IdCardNumber,
-          )}</td></tr>
+          ${
+            !isBusinessOrder && user.customerDetails.driversLicenseNumber
+              ? `<tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Führerscheinnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(
+                  user.customerDetails.driversLicenseNumber,
+                )}</td></tr>`
+              : ""
+          }
+          ${
+            !isBusinessOrder && user.customerDetails.IdCardNumber
+              ? `<tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Personalausweisnummer</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(
+                  user.customerDetails.IdCardNumber,
+                )}</td></tr>`
+              : ""
+          }
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Monatliche Gesamtrate:</td><td style="padding: 8px 16px; margin: 0;border-bottom: 1px solid #efefef">${parseFloat(contract.monthlyPrice).toFixed(2)} €</td></tr>
         ${
           contract.depositValue > 0
@@ -641,7 +678,13 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
         );
       }
 
-      orderAdminNotification(contract.id);
+      if (isBusiness) {
+        await syncCustomerFromOrder({
+          user,
+          customerDetails: user.customerDetails,
+          transaction,
+        });
+      }
 
       return contract;
     });
@@ -668,6 +711,15 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
       accessToken,
       extra: { contractId: result.id },
     });
+
+    const adminNotified = await orderAdminNotification(result.id);
+    if (!adminNotified) {
+      logger(
+        "error",
+        "Admin-Benachrichtigung konnte nicht versendet werden für Contract: #" +
+          result.id,
+      );
+    }
 
     res.status(201).json({
       message: "Contract created successfully",
@@ -716,6 +768,11 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
       return res.status(200).json({
         message: "User score is not matching the score in the settings",
         redirectUrl: "/nicht-abonnierbar",
+      });
+    }
+    if (error.message === "BUSINESS_COMPANY_NAME_REQUIRED") {
+      return res.status(400).json({
+        message: "Bitte gib einen Unternehmensnamen an.",
       });
     }
     if (error.message === "COLOR_ALREADY_ORDERED") {

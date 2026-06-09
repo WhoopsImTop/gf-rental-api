@@ -47,6 +47,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
       },
+      customerType: {
+        type: DataTypes.ENUM("private", "business"),
+        allowNull: false,
+        defaultValue: "private",
+      },
       depositValue: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,

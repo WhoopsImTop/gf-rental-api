@@ -201,6 +201,58 @@ exports.syncCart = async (req, res) => {
   }
 };
 
+exports.updateCustomerType = async (req, res) => {
+  try {
+    const accessToken = normalizeCartAccessToken(req.params.accessToken);
+    if (!accessToken) {
+      return res.status(404).json({
+        message:
+          "Der Warenkorb wurde nicht gefunden. Bitte konfiguriere dein Fahrzeug erneut.",
+      });
+    }
+
+    const { customerType } = req.body || {};
+    if (customerType !== "private" && customerType !== "business") {
+      return res.status(400).json({
+        message: "Ungültiger Kundentyp. Erlaubt sind 'private' und 'business'.",
+      });
+    }
+
+    const cart = await db.Cart.findOne({ where: { accessToken } });
+    if (!cart) {
+      return res.status(404).json({
+        message:
+          "Der Warenkorb wurde nicht gefunden. Bitte konfiguriere dein Fahrzeug erneut.",
+      });
+    }
+
+    if (cart.completed) {
+      return res.status(409).json({
+        message: "Dieser Warenkorb ist bereits abgeschlossen.",
+      });
+    }
+
+    cart.customerType = customerType;
+    await cart.save();
+
+    logSecurityEvent({
+      req,
+      action: "cart_customer_type",
+      outcome: "updated",
+      accessToken: cart.accessToken,
+      extra: { customerType },
+    });
+
+    return res.json({
+      accessToken: cart.accessToken,
+      customerType: cart.customerType,
+    });
+  } catch (error) {
+    logger("error", `[updateCustomerType] ${error.message}`);
+    return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
+  }
+};
+
 exports.getCart = async (req, res) => {
   try {
     const accessToken = normalizeCartAccessToken(req.params.accessToken);

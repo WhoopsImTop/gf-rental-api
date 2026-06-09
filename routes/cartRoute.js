@@ -10,6 +10,11 @@ const cartSyncLimiter = rateLimit({
 });
 
 router.post("/sync", cartSyncLimiter, cartController.syncCart);
+router.patch(
+  "/:accessToken/customer-type",
+  cartSyncLimiter,
+  cartController.updateCustomerType,
+);
 router.get("/:accessToken", cartController.getCart);
 
 module.exports = router;

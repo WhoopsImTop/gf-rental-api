@@ -322,6 +322,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
       },
+      customerType: {
+        type: DataTypes.ENUM("private", "business"),
+        allowNull: false,
+        defaultValue: "private",
+      },
       createdAt: {
         type: DataTypes.DATE,
       },
