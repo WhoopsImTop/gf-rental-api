@@ -295,6 +295,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
+      monthlyDepositDiscount: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
       lat: {
         type: DataTypes.TEXT,
         set(value) {

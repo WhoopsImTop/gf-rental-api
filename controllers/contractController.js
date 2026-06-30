@@ -453,6 +453,10 @@ exports.createContract = async (req, res) => {
         throw new Error("PRICE_CONFIGURATION_INVALID");
       }
       const depVal = parseFloat(Cart.depositValue) || 0;
+      const monthlyDepositDiscount =
+        depVal > 0
+          ? Math.round((depVal * 1.025) / parseInt(duration, 10))
+          : 0;
       let monthlyPrice = basePrice;
       if (depVal > 0) {
         monthlyPrice = basePrice - (depVal * 1.025) / parseInt(duration, 10);
@@ -503,6 +507,7 @@ exports.createContract = async (req, res) => {
           durationType: Cart.durationType || "fixed",
           depositValue: Cart.depositValue,
           calculatedMonthlyPrice: Cart.calculatedMonthlyPrice,
+          monthlyDepositDiscount,
           syncedByCantamen: syncedByCantamen,
           customerType: isBusiness ? "business" : "private",
           score: userScore.score || "Kein Score vorhanden",

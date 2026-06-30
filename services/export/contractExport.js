@@ -53,8 +53,22 @@ async function generateContractPdf(contractInstance, options = {}) {
     const getMwStAnteil = (brutto) =>
       brutto ? parseFloat(brutto) - parseFloat(brutto) / 1.19 : 0;
 
-    const bruttoMiete = parseFloat(
+    const basePrice =
+      contractInstance.durationType === "minimum"
+        ? parseFloat(contractInstance.price?.priceMinimumDuration || 0)
+        : parseFloat(contractInstance.price?.priceFixedDuration || 0);
+    const bruttoMiete = Number.isFinite(basePrice) ? basePrice : 0;
+    const bruttoMieteEffektiv = parseFloat(
       contractInstance.calculatedMonthlyPrice || 0,
+    );
+    const depositDiscountRaw = Math.round(
+      contractInstance.monthlyDepositDiscount != null
+        ? parseFloat(contractInstance.monthlyDepositDiscount)
+        : (() => {
+            const dep = parseFloat(contractInstance.depositValue) || 0;
+            const dur = parseInt(contractInstance.duration, 10);
+            return dep > 0 && dur > 0 ? (dep * 1.025) / dur : 0;
+          })(),
     );
     const bruttoHaftung = contractInstance.insurancePackage
       ? parseFloat(contractInstance.insuranceCosts || 0)
@@ -78,10 +92,10 @@ async function generateContractPdf(contractInstance, options = {}) {
 
     // Summenbildung für die Kostenaufstellung [cite: 38-43]
     const monatsgebuehrNettoGesamt =
-      getNetto(bruttoMiete) + getNetto(bruttoHaftung);
+      getNetto(bruttoMieteEffektiv) + getNetto(bruttoHaftung);
     const mwstGesamt =
-      getMwStAnteil(bruttoMiete) + getMwStAnteil(bruttoHaftung);
-    const monatsgebuehrBruttoGesamt = bruttoMiete + bruttoHaftung;
+      getMwStAnteil(bruttoMieteEffektiv) + getMwStAnteil(bruttoHaftung);
+    const monatsgebuehrBruttoGesamt = bruttoMieteEffektiv + bruttoHaftung;
     const signatureFullName = options.signatureFullName || "";
     const signatureDate = options.signedAt ? new Date(options.signedAt) : null;
     const signatureDateLabel = signatureDate
@@ -220,6 +234,12 @@ async function generateContractPdf(contractInstance, options = {}) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
+      monthlyDepositDiscount:
+        depositDiscountRaw > 0
+          ? `-${depositDiscountRaw.toLocaleString("de-DE", {
+              maximumFractionDigits: 0,
+            })} €`
+          : "",
 
       MonthlyTotalBrutto: monatsgebuehrBruttoGesamt.toLocaleString("de-DE", {
         minimumFractionDigits: 2,
