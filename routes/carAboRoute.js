@@ -10,6 +10,7 @@ const {
   updateCarAbo,
   deleteCarAbo,
   calculatePrice,
+  findEquipmentSuggestions,
 } = require("../controllers/carAboController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { requireRole } = require("../middleware/requireRole");
@@ -30,6 +31,12 @@ router.get(
   findAllCarAboAdmin,
 );
 router.get("/available", findAvailableCarAbos);
+router.get(
+  "/equipment-suggestions",
+  authenticateToken,
+  requireRole("ADMIN", "SELLER"),
+  findEquipmentSuggestions,
+);
 router.get("/:id", findOneCarAbo);
 router.patch("/:id", authenticateToken, requireRole("ADMIN", "SELLER"), updateCarAbo);
 router.delete("/:id", authenticateToken, requireRole("ADMIN", "SELLER"), deleteCarAbo);

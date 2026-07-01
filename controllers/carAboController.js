@@ -361,6 +361,47 @@ exports.findAllCarAbos = async (req, res) => {
   }
 };
 
+const parseEquipmentField = (raw) => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return raw
+        .split(",")
+        .map((e) => e.trim())
+        .filter((e) => e);
+    }
+  }
+  return [];
+};
+
+exports.findEquipmentSuggestions = async (req, res) => {
+  try {
+    const carAbos = await db.CarAbo.findAll({
+      attributes: ["equipment"],
+    });
+
+    const unique = new Set();
+    for (const abo of carAbos) {
+      for (const item of parseEquipmentField(abo.equipment)) {
+        const trimmed = String(item).trim();
+        if (trimmed) unique.add(trimmed);
+      }
+    }
+
+    const suggestions = Array.from(unique).sort((a, b) =>
+      a.localeCompare(b, "de"),
+    );
+    return res.status(200).json(suggestions);
+  } catch (error) {
+    logger("error", `[findEquipmentSuggestions] ${error.message}`);
+    return res.status(500).send({ error: "Es ist ein Fehler aufgetreten" });
+  }
+};
+
 exports.findAllCarAboAdmin = async (req, res) => {
   try {
     const carAbos = await db.CarAbo.findAll({
