@@ -61,6 +61,18 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.JSON,
         allowNull: true,
       },
+      group_key: {
+        type: DataTypes.STRING(128),
+        allowNull: true,
+      },
+      group_label: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      show_if: {
+        type: DataTypes.JSON,
+        allowNull: true,
+      },
       order_index: {
         type: DataTypes.INTEGER,
         defaultValue: 0,

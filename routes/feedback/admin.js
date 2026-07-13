@@ -8,7 +8,11 @@ const {
 } = require("../../services/feedback/questionOptions");
 const {
   normalizeRequiredIf,
+  normalizeShowIf,
+  normalizeGroupKey,
   validateRequiredIf,
+  validateShowIf,
+  validateGroupKeyContinuity,
 } = require("../../services/feedback/questionConditions");
 
 function resolveKanbanStatus(metadata) {
@@ -38,27 +42,56 @@ async function getSurveyOr404(surveyId, res) {
   return survey;
 }
 
-async function resolveRequiredIfForQuestion(surveyId, requiredIfRaw, orderIndex, questionId) {
-  if (requiredIfRaw === undefined) {
-    return { skip: true };
-  }
-
+async function resolveQuestionConditionsForSave(
+  surveyId,
+  { required_if, show_if, group_key, order_index, questionId },
+) {
   const surveyQuestions = await FeedbackQuestion.findAll({
     where: { survey_id: surveyId },
     order: [["order_index", "ASC"]],
   });
 
-  const validationError = validateRequiredIf(requiredIfRaw, {
+  const resolvedOrderIndex = order_index;
+  const ctx = {
     surveyQuestions,
-    currentOrderIndex: orderIndex,
+    currentOrderIndex: resolvedOrderIndex,
     currentQuestionId: questionId,
-  });
+  };
 
-  if (validationError) {
-    return { error: validationError };
+  if (group_key !== undefined) {
+    const groupError = validateGroupKeyContinuity(
+      group_key,
+      surveyQuestions,
+      resolvedOrderIndex,
+      questionId,
+    );
+    if (groupError) return { error: groupError };
   }
 
-  return { value: normalizeRequiredIf(requiredIfRaw) };
+  let requiredIfValue;
+  if (required_if !== undefined) {
+    const requiredError = validateRequiredIf(required_if, ctx);
+    if (requiredError) return { error: requiredError };
+    requiredIfValue = normalizeRequiredIf(required_if);
+  }
+
+  let showIfValue;
+  if (show_if !== undefined) {
+    const showError = validateShowIf(show_if, ctx);
+    if (showError) return { error: showError };
+    showIfValue = normalizeShowIf(show_if);
+  }
+
+  let groupKeyValue;
+  if (group_key !== undefined) {
+    groupKeyValue = normalizeGroupKey(group_key);
+  }
+
+  return {
+    required_if: requiredIfValue,
+    show_if: showIfValue,
+    group_key: groupKeyValue,
+  };
 }
 
 // Surveys
@@ -185,6 +218,9 @@ router.post("/surveys/:id/questions", async (req, res) => {
       options,
       is_required,
       required_if,
+      show_if,
+      group_key,
+      group_label,
       order_index,
     } = req.body;
     if (!question_text || !type) {
@@ -192,14 +228,15 @@ router.post("/surveys/:id/questions", async (req, res) => {
     }
 
     const resolvedOrderIndex = order_index ?? 0;
-    const requiredIfResult = await resolveRequiredIfForQuestion(
-      survey.id,
-      required_if,
-      resolvedOrderIndex,
-      null,
-    );
-    if (requiredIfResult.error) {
-      return res.status(400).json({ error: requiredIfResult.error });
+    const conditionsResult = await resolveQuestionConditionsForSave(survey.id, {
+      required_if: required_if ?? null,
+      show_if: show_if ?? null,
+      group_key: group_key ?? null,
+      order_index: resolvedOrderIndex,
+      questionId: null,
+    });
+    if (conditionsResult.error) {
+      return res.status(400).json({ error: conditionsResult.error });
     }
 
     const question = await FeedbackQuestion.create({
@@ -209,7 +246,10 @@ router.post("/surveys/:id/questions", async (req, res) => {
       type,
       options: serializeQuestionOptions(options),
       is_required: is_required !== undefined ? is_required : true,
-      required_if: requiredIfResult.skip ? null : requiredIfResult.value,
+      required_if: conditionsResult.required_if,
+      show_if: conditionsResult.show_if,
+      group_key: conditionsResult.group_key,
+      group_label: group_label?.trim() || null,
       order_index: resolvedOrderIndex,
     });
     return res.status(201).json({ question });
@@ -232,20 +272,27 @@ router.put("/questions/:id", async (req, res) => {
       options,
       is_required,
       required_if,
+      show_if,
+      group_key,
+      group_label,
       order_index,
     } = req.body;
 
     const resolvedOrderIndex =
       order_index !== undefined ? order_index : question.order_index;
 
-    const requiredIfResult = await resolveRequiredIfForQuestion(
+    const conditionsResult = await resolveQuestionConditionsForSave(
       question.survey_id,
-      required_if,
-      resolvedOrderIndex,
-      question.id,
+      {
+        required_if: required_if !== undefined ? required_if : question.required_if,
+        show_if: show_if !== undefined ? show_if : question.show_if,
+        group_key: group_key !== undefined ? group_key : question.group_key,
+        order_index: resolvedOrderIndex,
+        questionId: question.id,
+      },
     );
-    if (requiredIfResult.error) {
-      return res.status(400).json({ error: requiredIfResult.error });
+    if (conditionsResult.error) {
+      return res.status(400).json({ error: conditionsResult.error });
     }
 
     await question.update({
@@ -262,8 +309,16 @@ router.put("/questions/:id", async (req, res) => {
       is_required: is_required !== undefined ? is_required : question.is_required,
       required_if:
         required_if !== undefined
-          ? requiredIfResult.value
+          ? conditionsResult.required_if
           : question.required_if,
+      show_if:
+        show_if !== undefined ? conditionsResult.show_if : question.show_if,
+      group_key:
+        group_key !== undefined ? conditionsResult.group_key : question.group_key,
+      group_label:
+        group_label !== undefined
+          ? group_label?.trim() || null
+          : question.group_label,
       order_index: resolvedOrderIndex,
     });
     return res.json({ question });

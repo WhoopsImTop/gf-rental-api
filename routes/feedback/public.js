@@ -5,6 +5,8 @@ const triggerEngine = require("../../services/feedback/triggerEngine");
 const { parseQuestionOptions } = require("../../services/feedback/questionOptions");
 const {
   normalizeRequiredIf,
+  normalizeShowIf,
+  normalizeGroupKey,
   isQuestionRequired,
 } = require("../../services/feedback/questionConditions");
 
@@ -33,6 +35,9 @@ function formatQuestion(q) {
     options: parseQuestionOptions(q.options),
     is_required: q.is_required,
     required_if: normalizeRequiredIf(q.required_if),
+    show_if: normalizeShowIf(q.show_if),
+    group_key: normalizeGroupKey(q.group_key),
+    group_label: q.group_label || null,
     order_index: q.order_index,
   };
 }
