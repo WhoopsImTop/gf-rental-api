@@ -30,11 +30,17 @@ exports.orderAdminNotification = async (id) => {
   try {
     const setting = await db.Setting.findOne();
     if (!setting?.notificationEmails) {
-      logger("error", `orderAdminNotification: notificationEmails fehlen (Contract #${id})`);
+      logger(
+        "error",
+        `orderAdminNotification: notificationEmails fehlen (Contract #${id})`,
+      );
       return false;
     }
 
     const contract = await db.Contract.findOne({ where: { id } });
+    const price = await db.CarAboPrice.findOne({
+      where: { id: contract.priceId },
+    });
     if (!contract) {
       logger("error", `orderAdminNotification: Contract #${id} nicht gefunden`);
       return false;
@@ -45,7 +51,10 @@ exports.orderAdminNotification = async (id) => {
       where: { id: contract.userId },
     });
     if (!user) {
-      logger("error", `orderAdminNotification: User für Contract #${id} nicht gefunden`);
+      logger(
+        "error",
+        `orderAdminNotification: User für Contract #${id} nicht gefunden`,
+      );
       return false;
     }
 
@@ -92,6 +101,10 @@ ${vehicleInternalId !== "-" ? `<span>Fahrzeug ID (${escapeHtml(vehicleInternalId
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">E-Mail</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${escapeHtml(user.email || "")}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${formatContractStartingDate(contract.startingDate)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.duration} ${contract.duration > 1 ? "Monate" : "Monat"}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Kilometerleistung</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${ price?.mileageKm || ""} km</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Anzahlung</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${parseFloat(contract.depositValue).toFixed(2)} €</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Laufzeit Typ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.durationType}</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Sicherheitspaket</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.insuranceType}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0;">Monatliche Rate</td><td style="padding: 8px 16px; margin: 0;">${parseFloat(contract.monthlyPrice).toFixed(2)} €</td></tr>
         </tbody>
       </table>
@@ -113,12 +126,18 @@ ${vehicleInternalId !== "-" ? `<span>Fahrzeug ID (${escapeHtml(vehicleInternalId
     );
 
     if (!emailSent) {
-      logger("error", `orderAdminNotification: Versand fehlgeschlagen (Contract #${id})`);
+      logger(
+        "error",
+        `orderAdminNotification: Versand fehlgeschlagen (Contract #${id})`,
+      );
     }
 
     return emailSent;
   } catch (error) {
-    logger("error", `orderAdminNotification: ${error.message} (Contract #${id})`);
+    logger(
+      "error",
+      `orderAdminNotification: ${error.message} (Contract #${id})`,
+    );
     return false;
   }
 };

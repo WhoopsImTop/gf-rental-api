@@ -163,6 +163,34 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      bookingSnapshot: {
+        // Encrypted immutable snapshot of the booking payload (and server-derived values)
+        // created during checkout. Decrypted in getter for CRM display.
+        type: DataTypes.TEXT,
+        allowNull: true,
+        set(value) {
+          if (value == null) {
+            this.setDataValue("bookingSnapshot", encrypt(null));
+            return;
+          }
+          const raw = typeof value === "string" ? value : JSON.stringify(value);
+          this.setDataValue("bookingSnapshot", encrypt(raw));
+        },
+        get() {
+          const encrypted = this.getDataValue("bookingSnapshot");
+          const decrypted = encrypted ? decrypt(encrypted) : null;
+          if (!decrypted) return null;
+          try {
+            return JSON.parse(decrypted);
+          } catch {
+            return decrypted;
+          }
+        },
+      },
+      bookingSnapshotHash: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
       signStatus: {
         type: DataTypes.ENUM(
           "not_requested",

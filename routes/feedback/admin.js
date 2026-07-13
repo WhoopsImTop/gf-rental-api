@@ -6,6 +6,10 @@ const {
   serializeQuestionOptions,
   parseJsonObject,
 } = require("../../services/feedback/questionOptions");
+const {
+  normalizeRequiredIf,
+  validateRequiredIf,
+} = require("../../services/feedback/questionConditions");
 
 function resolveKanbanStatus(metadata) {
   const meta = parseJsonObject(metadata) || {};
@@ -32,6 +36,29 @@ async function getSurveyOr404(surveyId, res) {
     return null;
   }
   return survey;
+}
+
+async function resolveRequiredIfForQuestion(surveyId, requiredIfRaw, orderIndex, questionId) {
+  if (requiredIfRaw === undefined) {
+    return { skip: true };
+  }
+
+  const surveyQuestions = await FeedbackQuestion.findAll({
+    where: { survey_id: surveyId },
+    order: [["order_index", "ASC"]],
+  });
+
+  const validationError = validateRequiredIf(requiredIfRaw, {
+    surveyQuestions,
+    currentOrderIndex: orderIndex,
+    currentQuestionId: questionId,
+  });
+
+  if (validationError) {
+    return { error: validationError };
+  }
+
+  return { value: normalizeRequiredIf(requiredIfRaw) };
 }
 
 // Surveys
@@ -151,17 +178,39 @@ router.post("/surveys/:id/questions", async (req, res) => {
   try {
     const survey = await getSurveyOr404(req.params.id, res);
     if (!survey) return;
-    const { question_text, type, options, is_required, order_index } = req.body;
+    const {
+      question_text,
+      description,
+      type,
+      options,
+      is_required,
+      required_if,
+      order_index,
+    } = req.body;
     if (!question_text || !type) {
       return res.status(400).json({ error: "question_text und type sind erforderlich." });
     }
+
+    const resolvedOrderIndex = order_index ?? 0;
+    const requiredIfResult = await resolveRequiredIfForQuestion(
+      survey.id,
+      required_if,
+      resolvedOrderIndex,
+      null,
+    );
+    if (requiredIfResult.error) {
+      return res.status(400).json({ error: requiredIfResult.error });
+    }
+
     const question = await FeedbackQuestion.create({
       survey_id: survey.id,
       question_text,
+      description: description?.trim() || null,
       type,
       options: serializeQuestionOptions(options),
       is_required: is_required !== undefined ? is_required : true,
-      order_index: order_index ?? 0,
+      required_if: requiredIfResult.skip ? null : requiredIfResult.value,
+      order_index: resolvedOrderIndex,
     });
     return res.status(201).json({ question });
   } catch (err) {
@@ -176,16 +225,46 @@ router.put("/questions/:id", async (req, res) => {
     if (!question) {
       return res.status(404).json({ error: "Frage nicht gefunden." });
     }
-    const { question_text, type, options, is_required, order_index } = req.body;
+    const {
+      question_text,
+      description,
+      type,
+      options,
+      is_required,
+      required_if,
+      order_index,
+    } = req.body;
+
+    const resolvedOrderIndex =
+      order_index !== undefined ? order_index : question.order_index;
+
+    const requiredIfResult = await resolveRequiredIfForQuestion(
+      question.survey_id,
+      required_if,
+      resolvedOrderIndex,
+      question.id,
+    );
+    if (requiredIfResult.error) {
+      return res.status(400).json({ error: requiredIfResult.error });
+    }
+
     await question.update({
       question_text: question_text ?? question.question_text,
+      description:
+        description !== undefined
+          ? description?.trim() || null
+          : question.description,
       type: type ?? question.type,
       options:
         options !== undefined
           ? serializeQuestionOptions(options)
           : question.options,
       is_required: is_required !== undefined ? is_required : question.is_required,
-      order_index: order_index !== undefined ? order_index : question.order_index,
+      required_if:
+        required_if !== undefined
+          ? requiredIfResult.value
+          : question.required_if,
+      order_index: resolvedOrderIndex,
     });
     return res.json({ question });
   } catch (err) {

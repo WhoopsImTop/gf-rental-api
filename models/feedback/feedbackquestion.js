@@ -29,6 +29,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
         allowNull: false,
       },
+      description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
       type: {
         type: DataTypes.ENUM(
           "single_choice",
@@ -52,6 +56,10 @@ module.exports = (sequelize, DataTypes) => {
       is_required: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
+      },
+      required_if: {
+        type: DataTypes.JSON,
+        allowNull: true,
       },
       order_index: {
         type: DataTypes.INTEGER,

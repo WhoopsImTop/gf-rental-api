@@ -3,6 +3,10 @@ const rateLimit = require("express-rate-limit");
 const db = require("../../models");
 const triggerEngine = require("../../services/feedback/triggerEngine");
 const { parseQuestionOptions } = require("../../services/feedback/questionOptions");
+const {
+  normalizeRequiredIf,
+  isQuestionRequired,
+} = require("../../services/feedback/questionConditions");
 
 const router = express.Router();
 
@@ -24,9 +28,11 @@ function formatQuestion(q) {
   return {
     id: q.id,
     question_text: q.question_text,
+    description: q.description || null,
     type: q.type,
     options: parseQuestionOptions(q.options),
     is_required: q.is_required,
+    required_if: normalizeRequiredIf(q.required_if),
     order_index: q.order_index,
   };
 }
@@ -112,7 +118,7 @@ router.post("/submit", submitLimiter, async (req, res) => {
     const answerMap = new Map(answers.map((a) => [a.question_id, a.value]));
 
     for (const question of questions) {
-      if (!question.is_required) continue;
+      if (!isQuestionRequired(question, answerMap)) continue;
       const value = answerMap.get(question.id);
       if (value === undefined || value === null || String(value).trim() === "") {
         return res.status(400).json({

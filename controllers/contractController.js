@@ -16,7 +16,7 @@ const {
 } = require("../services/notification/order");
 const { getUserScore } = require("../services/auth/personalScore");
 const { logSecurityEvent } = require("../services/audit/securityAudit");
-const { normalizeCartAccessToken } = require("../utils/cartAccessToken");
+const { normalizeCartAccessToken, hashCartAccessTokenForLog } = require("../utils/cartAccessToken");
 const { escapeHtml } = require("../services/util/escapeHtml");
 const {
   buildContractListWhere,
@@ -44,6 +44,25 @@ const normalizeSignToken = (token) => {
   }
   return decoded.replace(/\s/g, "");
 };
+
+function stableStringify(value) {
+  if (value === null || value === undefined) return String(value);
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  if (typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => stableStringify(v)).join(",")}]`;
+  }
+  const keys = Object.keys(value).sort();
+  return `{${keys
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`)
+    .join(",")}}`;
+}
+
+function normalizeMoney(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : String(value);
+}
 
 const getPublicAppBaseUrl = () => {
   const appUrl = process.env.APPURL || "http://localhost:3002/auto-abo";
@@ -209,8 +228,22 @@ exports.getAllContracts = async (req, res) => {
 
     const mappedContracts = contracts.map((contract) => {
       const asJson = contract.toJSON();
+
+      let bookingSnapshotHashValid = null;
+      try {
+        if (asJson?.bookingSnapshot && asJson?.bookingSnapshotHash) {
+          const recalculated = crypto
+            .createHash("sha256")
+            .update(stableStringify(asJson.bookingSnapshot))
+            .digest("hex");
+          bookingSnapshotHashValid = recalculated === asJson.bookingSnapshotHash;
+        }
+      } catch {
+        bookingSnapshotHashValid = null;
+      }
       return {
         ...asJson,
+        bookingSnapshotHashValid,
         activeContractFile: resolveActiveContractFileName(asJson),
       };
     });
@@ -468,6 +501,88 @@ exports.createContract = async (req, res) => {
       monthlyPrice = Math.round(monthlyPrice);
       const totalCost = duration * monthlyPrice;
 
+      const monthlyPriceFinal = normalizeMoney(monthlyPrice);
+      const totalCostFinal = normalizeMoney(totalCost);
+      const bookingSnapshot = {
+        schemaVersion: 1,
+        selections: {
+          accessTokenHash: hashCartAccessTokenForLog(accessToken),
+          cartId: Cart.id,
+          carAboId: Cart.carAboId,
+          colorId: Cart.colorId,
+          priceId: Cart.priceId,
+          durationType: Cart.durationType || "fixed",
+          depositValue: normalizeMoney(Cart.depositValue) ?? null,
+          customerType: isBusiness ? "business" : "private",
+        },
+        request: {
+          customerDetails: detailsPayload,
+          contractData: {
+            duration: contractData.duration ?? null,
+            startingDate: contractData.startingDate ?? null,
+            monthlyPrice: normalizeMoney(contractData.monthlyPrice),
+            totalCost: normalizeMoney(contractData.totalCost),
+            insurancePackage: contractData.insurancePackage || false,
+            insuranceType: contractData.insuranceType || "none",
+            insuranceCosts: normalizeMoney(contractData.insuranceCosts) ?? 0,
+            insuranceDeductibleHaftpflicht:
+              contractData.insuranceDeductibleHaftpflicht ?? null,
+            insuranceDeductibleTeilkasko:
+              contractData.insuranceDeductibleTeilkasko ?? null,
+            familyAndFriends: contractData.familyAndFriends || false,
+            familyAndFriendsCosts:
+              normalizeMoney(contractData.familyAndFriendsCosts) ?? 0,
+            familyAndFriendsMembers:
+              contractData.familyAndFriendsMembers || [],
+            wantsDelivery: contractData.wantsDelivery || false,
+            deliveryCosts: normalizeMoney(contractData.deliveryCosts) ?? 0,
+            differentDeliveryAdress:
+              contractData.differentDeliveryAdress || false,
+            deliveryStreet: contractData.deliveryStreet || null,
+            deliveryHousenumber: contractData.deliveryHousenumber ?? null,
+            deliveryPostalCode: contractData.deliveryPostalCode ?? null,
+            deliveryCountry: contractData.deliveryCountry ?? null,
+          },
+          paymentData: {
+            accountHolderName: paymentData.accountHolderName || null,
+            iban: paymentData.iban || null,
+            sepaMandate: !!paymentData.sepaMandate,
+            mandateReference: paymentData.mandateReference || null,
+            score: paymentData.score ?? null,
+          },
+        },
+        computed: {
+          duration,
+          durationType: Cart.durationType || "fixed",
+          startingDate: contractData.startingDate ?? null,
+          monthlyDepositDiscount: normalizeMoney(monthlyDepositDiscount),
+          monthlyPriceFinal,
+          totalCostFinal,
+          cartCalculatedMonthlyPrice: normalizeMoney(
+            Cart.calculatedMonthlyPrice,
+          ),
+          lat,
+          lon,
+          selectedPrice: {
+            mileageKm: selectedPrice.mileageKm ?? null,
+            priceFixedDuration:
+              selectedPrice.priceFixedDuration ?? null,
+            priceMinimumDuration:
+              selectedPrice.priceMinimumDuration ?? null,
+          },
+          rounded: {
+            monthlyPriceBeforeRounding: basePrice,
+            monthlyPriceAfterRounding: monthlyPrice,
+            totalCost,
+          },
+        },
+      };
+
+      const bookingSnapshotHash = crypto
+        .createHash("sha256")
+        .update(stableStringify(bookingSnapshot))
+        .digest("hex");
+
       const contract = await db.Contract.create(
         {
           userId,
@@ -513,6 +628,8 @@ exports.createContract = async (req, res) => {
           score: userScore.score || "Kein Score vorhanden",
           lat: lat,
           lng: lon,
+          bookingSnapshot,
+          bookingSnapshotHash,
         },
         { transaction },
       );

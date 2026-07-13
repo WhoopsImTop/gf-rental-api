@@ -618,17 +618,21 @@ exports.calculatePrice = async (req, res) => {
       return res.status(400).json({ error: "Die Anzahlung ist zu hoch. Der monatliche Preis muss größer als 0 € sein." });
     }
 
-    const totalCost = calculatedPrice * durationMonthsInt;
+    // Gleiche Rundungsreihenfolge wie cartController.syncCart / Contract-Erstellung
+    const monthlyPriceRounded = Math.round(
+      parseFloat(calculatedPrice.toFixed(2)),
+    );
+    const totalCost = monthlyPriceRounded * durationMonthsInt;
     const baseTotalCost = basePrice * durationMonthsInt;
-    const savings = baseTotalCost - (totalCost + depositAmount);
+    const savings =
+      baseTotalCost - (monthlyPriceRounded * durationMonthsInt + depositAmount);
 
     return res.status(200).json({
-      // Erst runden (Ganzzahl), dann zu String mit 2 Dezimalstellen konvertieren
-      monthlyPrice: Math.round(calculatedPrice).toFixed(2),
-      totalCost: Math.round(totalCost).toFixed(2),
+      monthlyPrice: monthlyPriceRounded.toFixed(2),
+      totalCost: totalCost.toFixed(2),
       savings: Math.round(savings).toFixed(2),
-      depositValue: Math.round(depositAmount).toFixed(2),
-      durationType: validDurationType
+      depositValue: depositAmount.toFixed(2),
+      durationType: validDurationType,
     });
   } catch (error) {
     logger("error", `[calculatePrice] ${error.message}`);

@@ -61,15 +61,19 @@ async function generateContractPdf(contractInstance, options = {}) {
     const bruttoMieteEffektiv = parseFloat(
       contractInstance.calculatedMonthlyPrice || 0,
     );
-    const depositDiscountRaw = Math.round(
-      contractInstance.monthlyDepositDiscount != null
-        ? parseFloat(contractInstance.monthlyDepositDiscount)
-        : (() => {
-            const dep = parseFloat(contractInstance.depositValue) || 0;
-            const dur = parseInt(contractInstance.duration, 10);
-            return dep > 0 && dur > 0 ? (dep * 1.025) / dur : 0;
-          })(),
-    );
+
+    // Reconciliation: damit die in der PDF angezeigten Einzelpositionen (Auto + Sicherheit + Rabatt)
+    // immer konsistent zum ausgewiesenen Monatsbetrag sind.
+    // Hintergrund: Server rundet zuerst den "effektiven" Monatsbetrag; die Rabattformel kann dabei
+    // im Randfall um 1€ abweichen (Rundungsreihenfolge).
+    const depositDiscountFromDiff =
+      Number.isFinite(bruttoMiete) && Number.isFinite(bruttoMieteEffektiv)
+        ? Math.max(0, Math.round(bruttoMiete - bruttoMieteEffektiv))
+        : 0;
+
+    const depositDiscountRaw = depositDiscountFromDiff;
+    const bruttoMieteForInvoice = bruttoMieteEffektiv + depositDiscountRaw;
+
     const bruttoHaftung = contractInstance.insurancePackage
       ? parseFloat(contractInstance.insuranceCosts || 0)
       : 0;
@@ -197,7 +201,7 @@ async function generateContractPdf(contractInstance, options = {}) {
             ? "Basic"
             : "Standard",
 
-      invoiceCarMonthlyNetto: getNetto(bruttoMiete).toLocaleString("de-DE", {
+      invoiceCarMonthlyNetto: getNetto(bruttoMieteForInvoice).toLocaleString("de-DE", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
@@ -206,7 +210,7 @@ async function generateContractPdf(contractInstance, options = {}) {
         { minimumFractionDigits: 2, maximumFractionDigits: 2 },
       ),
 
-      invoiceCarVat: getMwStAnteil(bruttoMiete).toLocaleString("de-DE", {
+      invoiceCarVat: getMwStAnteil(bruttoMieteForInvoice).toLocaleString("de-DE", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
@@ -215,7 +219,7 @@ async function generateContractPdf(contractInstance, options = {}) {
         { minimumFractionDigits: 2, maximumFractionDigits: 2 },
       ),
 
-      InvoiceCarMonthlyBrutto: bruttoMiete.toLocaleString("de-DE", {
+      InvoiceCarMonthlyBrutto: bruttoMieteForInvoice.toLocaleString("de-DE", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
