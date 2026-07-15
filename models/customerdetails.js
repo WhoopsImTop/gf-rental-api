@@ -94,24 +94,6 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         allowNull: false,
       },
-      acceptCalls: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false,
-        defaultValue: false,
-      },
-      acceptAGB: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false,
-        defaultValue: false,
-      },
-      consentedAt: {
-        type: DataTypes.DATE,
-        allowNull: true,
-      },
-      privacyPolicyVersion: {
-        type: DataTypes.STRING(64),
-        allowNull: true,
-      },
       driversLicenseNumber: {
         type: DataTypes.TEXT,
         allowNull: true,
