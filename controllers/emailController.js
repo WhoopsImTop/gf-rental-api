@@ -115,7 +115,12 @@ exports.resendConfirmation = async (req, res) => {
       user.email,
       null,
       "Ihre Auto Abo Bestellung - Grüne Flotte Auto Abo",
-      generatedEmailContent
+      generatedEmailContent,
+      null,
+      {
+        mailType: "notification",
+        context: { relatedUserId: user.id, relatedContractId: contract.id },
+      },
     );
     return res
       .status(201)
@@ -145,16 +150,119 @@ exports.sendCustomEmail = async (req, res) => {
       title,
       message
     );
-    const emailSent = await sendNotificationEmail(
-      email,
-      cc,
-      title,
-      generatedEmailContent
-    );
     return res
       .status(201)
       .json({ success: true, message: "Email sucessfully sent" });
   } catch (error) {
     return res.status(500).send({ error: "Internal server error" });
+  }
+};
+
+const EMAIL_LOG_LIST_ATTRIBUTES = [
+  "id",
+  "mailType",
+  "fromAddress",
+  "toAddress",
+  "ccAddress",
+  "subject",
+  "attachmentCount",
+  "messageId",
+  "status",
+  "errorMessage",
+  "relatedUserId",
+  "relatedContractId",
+  "createdAt",
+];
+
+const EMAIL_LOG_DETAIL_ATTRIBUTES = [
+  ...EMAIL_LOG_LIST_ATTRIBUTES,
+  "bodyText",
+  "bodyHtml",
+  "attachmentMeta",
+  "updatedAt",
+];
+
+const VALID_MAIL_TYPES = new Set([
+  "otp",
+  "password_reset",
+  "notification",
+  "error",
+  "custom",
+  "contact",
+  "feedback",
+  "admin_notification",
+]);
+
+const VALID_STATUSES = new Set(["sent", "failed", "skipped_dev"]);
+
+function parsePositiveInt(value, fallback, max) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return Math.min(parsed, max);
+}
+
+exports.listEmailLogs = async (req, res) => {
+  try {
+    const page = parsePositiveInt(req.query.page, 1, 1000);
+    const limit = parsePositiveInt(req.query.limit, 25, 100);
+    const offset = (page - 1) * limit;
+
+    const where = {};
+
+    if (req.query.mailType && VALID_MAIL_TYPES.has(String(req.query.mailType))) {
+      where.mailType = String(req.query.mailType);
+    }
+
+    if (req.query.status && VALID_STATUSES.has(String(req.query.status))) {
+      where.status = String(req.query.status);
+    }
+
+    const search = String(req.query.search || "").trim();
+    if (search) {
+      const { Op } = db.Sequelize;
+      where[Op.or] = [
+        { toAddress: { [Op.like]: `%${search}%` } },
+        { subject: { [Op.like]: `%${search}%` } },
+        { fromAddress: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    const { rows, count } = await db.EmailLog.findAndCountAll({
+      where,
+      attributes: EMAIL_LOG_LIST_ATTRIBUTES,
+      order: [["createdAt", "DESC"]],
+      limit,
+      offset,
+    });
+
+    return res.status(200).json({
+      logs: rows,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages: Math.max(1, Math.ceil(count / limit)),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+exports.getEmailLogById = async (req, res) => {
+  try {
+    const log = await db.EmailLog.findByPk(req.params.id, {
+      attributes: EMAIL_LOG_DETAIL_ATTRIBUTES,
+    });
+
+    if (!log) {
+      return res.status(404).json({ error: "Email log not found" });
+    }
+
+    return res.status(200).json({ log });
+  } catch (error) {
+    return res.status(500).json({ error: "Internal server error" });
   }
 };

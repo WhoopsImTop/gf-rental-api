@@ -123,6 +123,11 @@ ${vehicleInternalId !== "-" ? `<span>Fahrzeug ID (${escapeHtml(vehicleInternalId
       null,
       `Neue Auto Abo Bestellung(${autoAbo?.vehicleStatus === "new" ? "Neuwagen" : "Gebrauchtwagen"}) ${displayName}`,
       generatedEmailContent,
+      null,
+      {
+        mailType: "admin_notification",
+        context: { relatedContractId: contract.id, relatedUserId: user.id },
+      },
     );
 
     if (!emailSent) {
@@ -197,6 +202,11 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
       null,
       `Vertrag unterschrieben: ${autoAbo?.displayName || "Auto Abo"} (#${contract.id})`,
       generatedEmailContent,
+      null,
+      {
+        mailType: "admin_notification",
+        context: { relatedContractId: contract.id, relatedUserId: user?.id ?? null },
+      },
     );
   } catch (error) {
     console.log(error);

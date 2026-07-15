@@ -25,6 +25,7 @@ exports.sendContactInquiry = async (req, res) => {
             null,
             {
                 plainText: `Name: ${firstName} ${lastName}\nEmail: ${email}\nPhone: ${phone}\nMessage: ${message}`,
+                mailType: "contact",
             },
         );
         if (emailSent) {

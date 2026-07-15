@@ -60,7 +60,10 @@ async function executeEmailAction(rule, session, answers) {
   }
 
   const body = buildTriggerEmailBody(session, answers);
-  await sendNotificationEmail(to, null, subject, body, null, { plainText: body });
+  await sendNotificationEmail(to, null, subject, body, null, {
+    plainText: body,
+    mailType: "feedback",
+  });
 }
 
 async function executeSlackAction(rule, session, answers) {

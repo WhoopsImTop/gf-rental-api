@@ -4,6 +4,8 @@ const router = express.Router();
 const {
   resendConfirmation,
   sendCustomEmail,
+  listEmailLogs,
+  getEmailLogById,
 } = require("../controllers/emailController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { requireRole } = require("../middleware/requireRole");
@@ -32,6 +34,18 @@ router.post(
   authenticateToken,
   mailResendConfirmationLimiter,
   resendConfirmation,
+);
+router.get(
+  "/logs",
+  authenticateToken,
+  requireRole("ADMIN"),
+  listEmailLogs,
+);
+router.get(
+  "/logs/:id",
+  authenticateToken,
+  requireRole("ADMIN"),
+  getEmailLogById,
 );
 
 module.exports = router;

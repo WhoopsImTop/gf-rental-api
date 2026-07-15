@@ -1,9 +1,14 @@
 "use strict";
 
 const { anonymizeOldOrders } = require("./anonymizeOldOrders");
+const { maintainEmailLogRetention } = require("./purgeEmailLogBodies");
 
 function isEnabled() {
   return String(process.env.ANONYMIZE_ORDERS_ENABLED ?? "true") !== "false";
+}
+
+function isEmailLogPurgeEnabled() {
+  return String(process.env.EMAIL_LOG_PURGE_ENABLED ?? "true") !== "false";
 }
 
 function parseIntervalHours(value, fallback = 24) {
@@ -12,8 +17,8 @@ function parseIntervalHours(value, fallback = 24) {
 }
 
 function startAnonymizationScheduler() {
-  if (!isEnabled()) {
-    console.log("[privacy] Order anonymization scheduler disabled.");
+  if (!isEnabled() && !isEmailLogPurgeEnabled()) {
+    console.log("[privacy] Privacy scheduler disabled.");
     return null;
   }
 
@@ -26,12 +31,21 @@ function startAnonymizationScheduler() {
     isRunning = true;
 
     try {
-      const result = await anonymizeOldOrders();
-      console.log(
-        `[privacy] Order anonymization done: checked=${result.checkedCount}, anonymized=${result.anonymizedCount}, cutoffDays=${result.thresholdDays}`,
-      );
+      if (isEnabled()) {
+        const result = await anonymizeOldOrders();
+        console.log(
+          `[privacy] Order anonymization done: checked=${result.checkedCount}, anonymized=${result.anonymizedCount}, cutoffDays=${result.thresholdDays}`,
+        );
+      }
+
+      if (isEmailLogPurgeEnabled()) {
+        const emailLogResult = await maintainEmailLogRetention();
+        console.log(
+          `[privacy] Email log retention done: bodiesPurged=${emailLogResult.bodyResult.purgedCount}, metadataAnonymized=${emailLogResult.metadataResult.anonymizedCount}, bodyDays=${emailLogResult.bodyResult.thresholdDays}, metadataDays=${emailLogResult.metadataResult.thresholdDays}`,
+        );
+      }
     } catch (error) {
-      console.error("[privacy] Order anonymization failed:", error);
+      console.error("[privacy] Privacy scheduler failed:", error);
     } finally {
       isRunning = false;
     }

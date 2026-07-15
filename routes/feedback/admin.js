@@ -15,6 +15,16 @@ const {
   validateGroupKeyContinuity,
 } = require("../../services/feedback/questionConditions");
 
+function formatQuestionForAdmin(q) {
+  const json = typeof q.toJSON === "function" ? q.toJSON() : q;
+  return {
+    ...json,
+    required_if: normalizeRequiredIf(json.required_if),
+    show_if: normalizeShowIf(json.show_if),
+    group_key: normalizeGroupKey(json.group_key),
+  };
+}
+
 function resolveKanbanStatus(metadata) {
   const meta = parseJsonObject(metadata) || {};
   if (meta.kanban_status) return meta.kanban_status;
@@ -200,7 +210,7 @@ router.get("/surveys/:id/questions", async (req, res) => {
       where: { survey_id: survey.id },
       order: [["order_index", "ASC"]],
     });
-    return res.json({ questions });
+    return res.json({ questions: questions.map(formatQuestionForAdmin) });
   } catch (err) {
     console.error("[feedback/admin] GET questions:", err);
     return res.status(500).json({ error: "Interner Serverfehler" });
@@ -252,7 +262,7 @@ router.post("/surveys/:id/questions", async (req, res) => {
       group_label: group_label?.trim() || null,
       order_index: resolvedOrderIndex,
     });
-    return res.status(201).json({ question });
+    return res.status(201).json({ question: formatQuestionForAdmin(question) });
   } catch (err) {
     console.error("[feedback/admin] POST questions:", err);
     return res.status(500).json({ error: "Interner Serverfehler" });
@@ -321,7 +331,7 @@ router.put("/questions/:id", async (req, res) => {
           : question.group_label,
       order_index: resolvedOrderIndex,
     });
-    return res.json({ question });
+    return res.json({ question: formatQuestionForAdmin(question) });
   } catch (err) {
     console.error("[feedback/admin] PUT questions:", err);
     return res.status(500).json({ error: "Interner Serverfehler" });
@@ -370,7 +380,7 @@ router.patch("/surveys/:id/questions/reorder", async (req, res) => {
       where: { survey_id: survey.id },
       order: [["order_index", "ASC"]],
     });
-    return res.json({ questions });
+    return res.json({ questions: questions.map(formatQuestionForAdmin) });
   } catch (err) {
     console.error("[feedback/admin] PATCH reorder:", err);
     return res.status(500).json({ error: "Interner Serverfehler" });
