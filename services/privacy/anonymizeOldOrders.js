@@ -16,6 +16,8 @@ function cutoffDateFromDays(days) {
   return cutoff;
 }
 
+const STAFF_ROLES = new Set(["ADMIN", "SELLER"]);
+
 function applyContractAnonymization(contract) {
   // Delivery / address
   contract.deliveryStreet = REDACTED;
@@ -48,12 +50,18 @@ function applyContractAnonymization(contract) {
   contract.familyAndFriendsCosts = null;
   contract.familyAndFriendsMembers = null;
 
+  // Booking snapshot (contains PII from checkout)
+  contract.bookingSnapshot = null;
+  contract.bookingSnapshotHash = null;
+
   // Keep userId for historical assignment/reporting
   contract.completedBy = null;
 }
 
 function applyUserAnonymization(user) {
   if (!user) return;
+  // Skip staff accounts — losing their login would lock out the CRM
+  if (STAFF_ROLES.has(user.role)) return;
   user.phone = REDACTED;
 }
 

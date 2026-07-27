@@ -3,6 +3,11 @@ const { Op } = require("sequelize");
 const db = require("../../models");
 const { computeSurveyStats } = require("../../services/feedback/statsService");
 const {
+  parseExportDateRange,
+  parseColumnKeys,
+  buildFeedbackCsv,
+} = require("../../services/feedback/csvExport");
+const {
   serializeQuestionOptions,
   parseJsonObject,
 } = require("../../services/feedback/questionOptions");
@@ -618,6 +623,85 @@ router.get("/surveys/:id/stats", async (req, res) => {
     return res.json(stats);
   } catch (err) {
     console.error("[feedback/admin] GET stats:", err);
+    return res.status(500).json({ error: "Interner Serverfehler" });
+  }
+});
+
+router.get("/surveys/:id/export", async (req, res) => {
+  try {
+    const survey = await getSurveyOr404(req.params.id, res);
+    if (!survey) return;
+
+    const from = req.query.from;
+    const to = req.query.to;
+    if (!from || !to) {
+      return res.status(400).json({
+        error: "from und to (YYYY-MM-DD) sind erforderlich.",
+      });
+    }
+
+    const range = parseExportDateRange(String(from), String(to));
+    if (range.error) {
+      return res.status(400).json({ error: range.error });
+    }
+
+    const columnKeys = parseColumnKeys(req.query.columns);
+
+    const questions = await FeedbackQuestion.findAll({
+      where: { survey_id: survey.id },
+      order: [["order_index", "ASC"]],
+    });
+
+    const sessions = await FeedbackSession.findAll({
+      where: {
+        survey_id: survey.id,
+        status: "completed",
+        submitted_at: {
+          [Op.gte]: range.fromDate,
+          [Op.lte]: range.toDate,
+        },
+      },
+      include: [
+        {
+          model: FeedbackAnswer,
+          as: "answers",
+        },
+      ],
+      order: [
+        ["submitted_at", "ASC"],
+        ["createdAt", "ASC"],
+      ],
+    });
+
+    const plainSessions = sessions.map((session) => {
+      const plain = session.toJSON();
+      plain.kanban_status = resolveKanbanStatus(plain.metadata);
+      return plain;
+    });
+
+    const result = buildFeedbackCsv({
+      sessions: plainSessions,
+      questions,
+      columnKeys,
+      resolveKanbanStatus,
+    });
+
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    const safeFrom = String(from).replace(/[^\d-]/g, "");
+    const safeTo = String(to).replace(/[^\d-]/g, "");
+    const filename = `feedback-export-${safeFrom}_${safeTo}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`,
+    );
+    return res.send(result.csv);
+  } catch (err) {
+    console.error("[feedback/admin] GET export:", err);
     return res.status(500).json({ error: "Interner Serverfehler" });
   }
 });
