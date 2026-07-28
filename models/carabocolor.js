@@ -15,6 +15,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "carAboColorId",
         as: "exteriorImages",
       });
+      CarAboColor.hasMany(models.Contract, {
+        foreignKey: "colorId",
+        as: "contracts",
+      });
     }
   }
   CarAboColor.init(

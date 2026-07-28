@@ -64,6 +64,24 @@ const carAboAdminIncludes = [
         separate: true,
         order: [["sortOrder", "ASC"]],
       },
+      {
+        model: db.Contract,
+        as: "contracts",
+        attributes: ["id", "userId", "colorId"],
+        include: [
+          {
+            model: db.User,
+            attributes: ["id", "firstName", "lastName"],
+            include: [
+              {
+                model: db.CustomerDetails,
+                as: "customerDetails",
+                attributes: ["companyName"],
+              },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
