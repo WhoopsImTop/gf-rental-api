@@ -1,30 +1,41 @@
-function sanitizeString(value) {
+/** Fields that may contain trusted HTML (e.g. CRM vehicle descriptions). */
+const HTML_ALLOWED_KEYS = new Set(["description"]);
+
+function sanitizeString(value, { allowHtml = false } = {}) {
   if (typeof value !== "string") return value;
 
-  return value
-    .trim()
-    .replace(/\u0000/g, "")
-    .replace(/[<>]/g, "")
-    .replace(/javascript:/gi, "");
+  let sanitized = value.trim().replace(/\u0000/g, "");
+
+  if (!allowHtml) {
+    sanitized = sanitized.replace(/[<>]/g, "");
+  }
+
+  return sanitized.replace(/javascript:/gi, "");
 }
 
-function sanitizeValue(value) {
+function sanitizeValue(value, key = null) {
   if (Array.isArray(value)) {
-    return value.map(sanitizeValue);
+    return value.map((item) => sanitizeValue(item, key));
   }
 
   if (value && typeof value === "object") {
     const sanitizedObject = Object.create(null);
-    for (const key of Object.keys(value)) {
-      if (key === "__proto__" || key === "constructor" || key === "prototype") {
+    for (const objectKey of Object.keys(value)) {
+      if (
+        objectKey === "__proto__" ||
+        objectKey === "constructor" ||
+        objectKey === "prototype"
+      ) {
         continue;
       }
-      sanitizedObject[key] = sanitizeValue(value[key]);
+      sanitizedObject[objectKey] = sanitizeValue(value[objectKey], objectKey);
     }
     return sanitizedObject;
   }
 
-  return sanitizeString(value);
+  return sanitizeString(value, {
+    allowHtml: key != null && HTML_ALLOWED_KEYS.has(key),
+  });
 }
 
 function sanitizeRequestData(req, res, next) {
@@ -41,4 +52,4 @@ function sanitizeRequestData(req, res, next) {
   next();
 }
 
-module.exports = { sanitizeRequestData };
+module.exports = { sanitizeRequestData, HTML_ALLOWED_KEYS };
