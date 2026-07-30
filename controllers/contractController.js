@@ -361,6 +361,32 @@ exports.createContract = async (req, res) => {
         throw new Error("BUSINESS_COMPANY_NAME_REQUIRED");
       }
 
+      // Validate birthday: must be a real, non-overflowing calendar date in YYYY-MM-DD
+      // format, not in the future and not before 1900.
+      const rawBirthday = customerDetails.birthday;
+      if (!isBusiness) {
+        if (!rawBirthday || typeof rawBirthday !== "string") {
+          throw new Error("INVALID_BIRTHDAY");
+        }
+        const bdMatch = rawBirthday.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!bdMatch) {
+          throw new Error("INVALID_BIRTHDAY");
+        }
+        const bdYear = parseInt(bdMatch[1], 10);
+        const bdMonth = parseInt(bdMatch[2], 10);
+        const bdDay = parseInt(bdMatch[3], 10);
+        const bdDate = new Date(bdYear, bdMonth - 1, bdDay);
+        if (
+          bdYear < 1900 ||
+          bdDate > new Date() ||
+          bdDate.getFullYear() !== bdYear ||
+          bdDate.getMonth() !== bdMonth - 1 ||
+          bdDate.getDate() !== bdDay
+        ) {
+          throw new Error("INVALID_BIRTHDAY");
+        }
+      }
+
       const detailsPayload = {
         userId,
         birthday: isBusiness
@@ -888,6 +914,11 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
         message: "Bitte gib einen Unternehmensnamen an.",
       });
     }
+    if (error.message === "INVALID_BIRTHDAY") {
+      return res.status(400).json({
+        message: "Das angegebene Geburtsdatum ist ungültig. Bitte prüfe deine Eingabe.",
+      });
+    }
     if (error.message === "COLOR_ALREADY_ORDERED") {
       return res.status(200).json({
         message: "Color is already ordered",
@@ -963,6 +994,257 @@ exports.archiveContract = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
+      ...createGenericServerErrorResponse(),
+    });
+  }
+};
+
+const USER_PARTY_FIELDS = ["firstName", "lastName", "email", "phone"];
+const CUSTOMER_DETAILS_PARTY_FIELDS = [
+  "companyName",
+  "birthday",
+  "street",
+  "housenumber",
+  "postalCode",
+  "city",
+  "country",
+  "IdCardNumber",
+  "driversLicenseNumber",
+  "allowedLicenseClasses",
+  "licenseValidUntil",
+  "licenseIssuedOn",
+  "placeOfBirth",
+  "licenseIssuingPlace",
+];
+const CONTRACT_PARTY_FIELDS = ["iban", "accountHolderName"];
+
+const pickDefinedFields = (source, allowedFields) => {
+  if (!source || typeof source !== "object") return {};
+  const picked = {};
+  for (const field of allowedFields) {
+    if (Object.prototype.hasOwnProperty.call(source, field)) {
+      picked[field] = source[field];
+    }
+  }
+  return picked;
+};
+
+const isContractSigned = (contract) =>
+  Boolean(contract?.signedAt) || contract?.signStatus === "signed";
+
+const mapContractResponse = (contract) => {
+  const asJson = contract.toJSON();
+  let bookingSnapshotHashValid = null;
+  try {
+    if (asJson?.bookingSnapshot && asJson?.bookingSnapshotHash) {
+      const recalculated = crypto
+        .createHash("sha256")
+        .update(stableStringify(asJson.bookingSnapshot))
+        .digest("hex");
+      bookingSnapshotHashValid = recalculated === asJson.bookingSnapshotHash;
+    }
+  } catch {
+    bookingSnapshotHashValid = null;
+  }
+  return {
+    ...asJson,
+    bookingSnapshotHashValid,
+    activeContractFile: resolveActiveContractFileName(asJson),
+  };
+};
+
+exports.updateContractPartyData = async (req, res) => {
+  const contractId = req.params.id;
+
+  try {
+    const contract = await db.Contract.findByPk(contractId, {
+      include: [
+        {
+          model: db.User,
+          include: {
+            model: db.CustomerDetails,
+            as: "customerDetails",
+          },
+        },
+        {
+          model: db.CarAbo,
+          as: "carAbo",
+        },
+        {
+          model: db.CarAboColor,
+          as: "color",
+          required: false,
+        },
+        {
+          model: db.CarAboPrice,
+          as: "price",
+          required: false,
+        },
+      ],
+    });
+
+    if (!contract) {
+      return res.status(404).json({
+        success: false,
+        message: "Vertrag nicht gefunden",
+      });
+    }
+
+    if (!canManageContract(contract, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+    if (isContractSigned(contract)) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Unterschriebene Verträge können nicht mehr angepasst werden.",
+      });
+    }
+
+    const userPayload = pickDefinedFields(req.body?.user, USER_PARTY_FIELDS);
+    const customerDetailsPayload = pickDefinedFields(
+      req.body?.customerDetails,
+      CUSTOMER_DETAILS_PARTY_FIELDS,
+    );
+    const contractPayload = pickDefinedFields(
+      req.body?.contract,
+      CONTRACT_PARTY_FIELDS,
+    );
+
+    if (
+      Object.keys(userPayload).length === 0 &&
+      Object.keys(customerDetailsPayload).length === 0 &&
+      Object.keys(contractPayload).length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Keine gültigen Felder zum Aktualisieren übergeben.",
+      });
+    }
+
+    await db.sequelize.transaction(async (transaction) => {
+      if (Object.keys(userPayload).length > 0) {
+        if (!contract.User) {
+          throw new Error("USER_MISSING");
+        }
+        await contract.User.update(userPayload, { transaction });
+      }
+
+      if (Object.keys(customerDetailsPayload).length > 0) {
+        if (!contract.User?.customerDetails) {
+          throw new Error("CUSTOMER_DETAILS_MISSING");
+        }
+        await contract.User.customerDetails.update(customerDetailsPayload, {
+          transaction,
+        });
+      }
+
+      if (Object.keys(contractPayload).length > 0) {
+        await contract.update(contractPayload, { transaction });
+      }
+    });
+
+    await contract.reload({
+      include: [
+        {
+          model: db.User,
+          include: {
+            model: db.CustomerDetails,
+            as: "customerDetails",
+          },
+        },
+        {
+          model: db.CarAbo,
+          as: "carAbo",
+        },
+        {
+          model: db.CarAboColor,
+          as: "color",
+          required: false,
+        },
+        {
+          model: db.CarAboPrice,
+          as: "price",
+          required: false,
+        },
+      ],
+    });
+
+    const oldGeneratedFile = contract.contractFile;
+    const oldUploadedFile = contract.uploadedContractFile;
+    const pdfFileName = await generateContractPdf(contract);
+
+    await contract.update({
+      contractFile: pdfFileName,
+      uploadedContractFile: null,
+    });
+
+    if (oldUploadedFile && oldUploadedFile !== pdfFileName) {
+      deleteContractFileIfExists(oldUploadedFile);
+    }
+    if (
+      oldGeneratedFile &&
+      oldGeneratedFile !== pdfFileName &&
+      oldGeneratedFile !== oldUploadedFile
+    ) {
+      deleteContractFileIfExists(oldGeneratedFile);
+    }
+
+    await contract.reload({
+      include: [
+        {
+          model: db.User,
+          include: {
+            model: db.CustomerDetails,
+            as: "customerDetails",
+          },
+        },
+        {
+          model: db.CarAbo,
+          as: "carAbo",
+        },
+        {
+          model: db.CarAboColor,
+          as: "color",
+          required: false,
+        },
+        {
+          model: db.CarAboPrice,
+          as: "price",
+          required: false,
+        },
+      ],
+    });
+
+    return res.json({
+      success: true,
+      message: "Vertragsparteien aktualisiert und Vertrag neu erzeugt.",
+      file: pdfFileName,
+      contract: mapContractResponse(contract),
+    });
+  } catch (error) {
+    if (error?.message === "USER_MISSING") {
+      return res.status(400).json({
+        success: false,
+        message: "Dem Vertrag ist kein Benutzer zugeordnet.",
+      });
+    }
+    if (error?.message === "CUSTOMER_DETAILS_MISSING") {
+      return res.status(400).json({
+        success: false,
+        message: "Kundendetails fehlen und können nicht aktualisiert werden.",
+      });
+    }
+    logger(
+      "error",
+      `updateContractPartyData failed for contract ${contractId}: ${error?.message || error}`,
+    );
+    return res.status(500).json({
       success: false,
       ...createGenericServerErrorResponse(),
     });

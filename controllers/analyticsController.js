@@ -153,10 +153,13 @@ exports.trackVisit = async (req, res) => {
     const geo = geoip.lookup(clientIp);
     const country = geo ? geo.country : 'Unknown';
 
+    //anonymize ip address
+    const anonymizedIp = 'xxx.xxx.xxx.xxx';
+
     // Save to database
     await PageVisit.create({
       session_id,
-      ip_address: clientIp,
+      ip_address: anonymizedIp,
       country,
       referrer: referrer || null,
       campaign: campaign || null,

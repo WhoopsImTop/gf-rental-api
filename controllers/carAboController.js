@@ -27,6 +27,8 @@ const carAboIncludes = [
   {
     model: db.CarAboColor,
     as: "colors",
+    // Never expose internal identifiers in public/car-configuration responses.
+    attributes: { exclude: ["internalId"] },
     include: [
       { model: db.Media, as: "media" },
       {
@@ -67,7 +69,11 @@ const carAboAdminIncludes = [
       {
         model: db.Contract,
         as: "contracts",
-        attributes: ["id", "userId", "colorId"],
+        attributes: ["id", "userId", "colorId", "createdAt"],
+        where: { archived: false },
+        required: false,
+        separate: true,
+        order: [["createdAt", "DESC"]],
         include: [
           {
             model: db.User,
@@ -445,6 +451,8 @@ exports.findAvailableCarAbos = async (req, res) => {
         {
           model: db.CarAboColor,
           as: "colors",
+          // Never expose internal identifiers in public endpoints.
+          attributes: { exclude: ["internalId"] },
           include: [
             { model: db.Media, as: "media" },
             {

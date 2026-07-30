@@ -29,6 +29,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       firstName: {
         type: DataTypes.STRING,
+        allowNull: true,
         set(value) {
           this.setDataValue("firstName", encrypt(value));
         },
@@ -39,6 +40,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       lastName: {
         type: DataTypes.STRING,
+        allowNull: true,
         set(value) {
           this.setDataValue("lastName", encrypt(value));
         },

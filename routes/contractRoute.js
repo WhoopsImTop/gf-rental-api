@@ -6,6 +6,7 @@ const multer = require("multer");
 const path = require("path");
 const contractController = require("../controllers/contractController");
 const { authenticateToken } = require("../middleware/authMiddleware");
+const { requireRole } = require("../middleware/requireRole");
 
 const publicSignLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -108,6 +109,12 @@ router.post(
   authenticateToken,
   contractUpload.single("contractFile"),
   contractController.uploadContractFile
+);
+router.patch(
+  "/:id/party-data",
+  authenticateToken,
+  requireRole("ADMIN", "SELLER"),
+  contractController.updateContractPartyData,
 );
 router.patch(
   "/archive/:id",

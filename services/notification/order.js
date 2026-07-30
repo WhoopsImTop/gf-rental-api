@@ -74,14 +74,12 @@ exports.orderAdminNotification = async (id) => {
     });
 
     const previewImageUrl = autoAbo?.colors?.[0]?.media?.url || "";
-    const vehicleInternalId = autoAbo?.colors?.[0]?.internalId || "-";
     const isBusinessOrder =
       contract.customerType === "business" ||
       Boolean(user.customerDetails?.companyName);
 
     const emailContent = `
 ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" height="auto"/>` : ""}
-${vehicleInternalId !== "-" ? `<span>Fahrzeug ID (${escapeHtml(vehicleInternalId)})</span>` : ""}
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Neues Auto Abo!</h2>
       <p>Hallo Grüne Flotte Abo-Team, es wurde ein neues Auto Abo abgeschlossen.</p>
       ${isBusinessOrder ? "<p><strong>Geschäftskunden-Bestellung</strong> – Bonitätsprüfung manuell durchführen.</p>" : ""}

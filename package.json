@@ -16,7 +16,7 @@
   "author": "Elias Englen",
   "license": "ISC",
   "dependencies": {
-    "axios": "^1.16.1",
+    "axios": "^1.18.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
@@ -44,6 +44,11 @@
     "sequelize-cli": "^6.6.2"
   },
   "overrides": {
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "form-data": "^4.0.6",
+    "brace-expansion": "^5.0.8",
+    "body-parser": "^1.20.6",
+    "minimatch": "^10.0.3",
+    "glob": "^11.0.2"
   }
 }

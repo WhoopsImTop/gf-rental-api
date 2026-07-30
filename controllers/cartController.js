@@ -275,6 +275,8 @@ exports.getCart = async (req, res) => {
             {
               model: db.CarAboColor,
               as: "colors",
+          // Never expose internal identifiers in public cart responses.
+          attributes: { exclude: ["internalId"] },
               include: [{ model: db.Media, as: "media" }],
             },
             {
