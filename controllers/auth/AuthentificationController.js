@@ -2,7 +2,14 @@ const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
 const { generateSecret: generateTotpSecret, verifyCode: verifyTotpCode, generateURI: generateTotpURI } = require("../../services/auth/totpService");
-const { createToken, verifyToken } = require("../../services/auth/tokenService");
+const { createToken, createMfaToken, verifyToken } = require("../../services/auth/tokenService");
+const {
+  setAuthCookie,
+  clearAuthCookie,
+  SESSION_MAX_AGE_MS,
+  getAuthTokenFromRequest,
+  isAllowedBrowserLogout,
+} = require("../../services/auth/authCookie");
 const { User, Session, Cart } = require("../../models"); // Importiere das User-Modell
 const { createHash, encrypt } = require("../../services/encryption");
 const { sendOtpEmail, sendPasswordResetEmail } = require("../../services/mailService");
@@ -14,24 +21,6 @@ const { VerificationCode, PasswordResetCode } = require("../../models");
 const { normalizeCartAccessToken } = require("../../utils/cartAccessToken");
 const { logSecurityEvent } = require("../../services/audit/securityAudit");
 
-const AUTH_COOKIE_NAME = "gf_crm_session";
-const isProduction = process.env.NODE_ENV === "production";
-const authCookieConfig = {
-  httpOnly: true,
-  secure: isProduction,
-  sameSite: "strict",
-  path: "/",
-  maxAge: 24 * 60 * 60 * 1000,
-};
-
-function setAuthCookie(res, token) {
-  res.cookie(AUTH_COOKIE_NAME, token, authCookieConfig);
-}
-
-function clearAuthCookie(res) {
-  res.clearCookie(AUTH_COOKIE_NAME, { ...authCookieConfig, maxAge: undefined });
-}
-
 function extractIsoDate(value) {
   if (!value) return null;
   const match = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
@@ -41,7 +30,7 @@ function extractIsoDate(value) {
 async function createUserSession(user) {
   await Session.destroy({ where: { userId: user.id } });
   const token = createToken({ userId: user.id, role: user.role });
-  const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
   await Session.create({ userId: user.id, token, expiresAt });
   return token;
 }
@@ -245,7 +234,7 @@ exports.loginUser = async (req, res) => {
 
     // Wenn MFA aktiviert ist, temporären Token zurückgeben
     if (user.mfaEnabled) {
-      const mfaToken = createToken({ userId: user.id, purpose: "mfa" });
+      const mfaToken = createMfaToken({ userId: user.id });
       logSecurityEvent({
         req,
         action: "login",
@@ -262,7 +251,7 @@ exports.loginUser = async (req, res) => {
     const token = createToken({ userId: user.id, role: user.role });
 
     // Session in der Datenbank speichern
-    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000); // 24 Stunden
+    const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
     await Session.create({ userId: user.id, token, expiresAt });
 
     logSecurityEvent({
@@ -282,7 +271,6 @@ exports.loginUser = async (req, res) => {
         phone: user.phone,
         role: user.role,
       },
-      token,
     });
   } catch (error) {
     console.error("Error during login:", error);
@@ -467,7 +455,7 @@ exports.verifyMfaLogin = async (req, res) => {
     // MFA verified — create full session
     await Session.destroy({ where: { userId: user.id } });
     const token = createToken({ userId: user.id, role: user.role });
-    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
+    const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
     await Session.create({ userId: user.id, token, expiresAt });
 
     logSecurityEvent({
@@ -487,7 +475,6 @@ exports.verifyMfaLogin = async (req, res) => {
         phone: user.phone,
         role: user.role,
       },
-      token,
     });
   } catch (error) {
     console.error("Error verifying MFA login:", error);
@@ -520,6 +507,7 @@ exports.disableMfa = async (req, res) => {
     await user.update({ mfaEnabled: false, mfaSecret: null });
 
     await Session.destroy({ where: { userId: user.id } });
+    clearAuthCookie(res);
 
     res.json({ message: "MFA disabled successfully" });
   } catch (error) {
@@ -708,14 +696,16 @@ exports.getCurrentUser = async (req, res) => {
 
 exports.logoutUser = async (req, res) => {
   try {
-    const token =
-      req.headers.authorization?.split(" ")[1] ||
-      req.authToken ||
-      null;
+    if (!isAllowedBrowserLogout(req)) {
+      // Do not clear a victim's cookie on rejected cross-site CSRF attempts.
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    // Best-effort: works without prior authenticateToken so forceLogout
+    // can always clear the httpOnly cookie even when the session is already gone.
+    const token = getAuthTokenFromRequest(req);
     if (token) {
       await Session.destroy({ where: { token } });
-    } else if (req.user?.id) {
-      await Session.destroy({ where: { userId: req.user.id } });
     }
     clearAuthCookie(res);
     return res.json({ message: "Logged out" });

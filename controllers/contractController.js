@@ -875,6 +875,8 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
       extra: { error: error.message },
     });
 
+    logger("error", "Error creating contract" + error);
+
     if (error.message === "MISSING_ACCESS_TOKEN") {
       return res.status(400).json({
         message: "Warenkorb-Token fehlt. Bitte starte die Buchung erneut.",
@@ -958,7 +960,6 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
       });
     }
 
-    logger("error", "Error creating contract" + error);
     res.status(500).json(createGenericServerErrorResponse());
   }
 };

@@ -102,7 +102,14 @@ app.use(
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
-  message: "Too many requests from this IP, please try again later"
+  message: "Too many requests from this IP, please try again later",
+});
+
+// Heartbeat (/auth/me every ~5 min) must not share the strict auth bucket.
+const authMeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: "Too many requests from this IP, please try again later",
 });
 
 // Route zum Testen
@@ -111,7 +118,16 @@ app.get("/", (req, res) => {
 });
 
 // Routen
-app.use("/api/auth", authLimiter, AuthentificationRoute);
+app.use(
+  "/api/auth",
+  (req, res, next) => {
+    if (req.method === "GET" && req.path === "/me") {
+      return authMeLimiter(req, res, next);
+    }
+    return authLimiter(req, res, next);
+  },
+  AuthentificationRoute,
+);
 app.use("/api/users", authenticateToken, userRoute);
 app.use("/api/car-abos", carAboRoute);
 app.use("/api/brands", brandRoute);
