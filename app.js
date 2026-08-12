@@ -34,6 +34,8 @@ const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
 const { authenticateToken } = require("./middleware/authMiddleware");
 const { sanitizeRequestData } = require("./middleware/requestSanitizer");
 const { startAnonymizationScheduler } = require("./services/privacy/anonymizationScheduler");
+const { startFollowupScheduler } = require("./services/followup/followupScheduler");
+const followupRoute = require("./routes/followupRoute");
 
 const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
@@ -139,6 +141,7 @@ app.use("/api/cart", cartRoute);
 app.use("/api/delivery-costs", deliveryCostsRoute);
 app.use("/api/delivery-places", deliveryPlacesRoute);
 app.use("/api/mail", emailRoute);
+app.use("/api/followup", followupRoute);
 app.use("/api/settings", settingRoute);
 
 //CRM-Routen
@@ -174,6 +177,7 @@ app.listen(serverPort, async () => {
     await sequelize.authenticate(); // Verbindung zur Datenbank testen
     console.log("Datenbankverbindung erfolgreich!");
     startAnonymizationScheduler();
+    startFollowupScheduler();
   } catch (error) {
     console.error("Fehler bei der Verbindung zur Datenbank:", error);
     process.exit(1); // Beende den Prozess, falls die Verbindung fehlschlägt

@@ -29,6 +29,7 @@ module.exports = (sequelize, DataTypes) => {
           "contact",
           "feedback",
           "admin_notification",
+          "followup",
         ),
         allowNull: false,
       },

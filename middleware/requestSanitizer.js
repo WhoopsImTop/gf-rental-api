@@ -1,5 +1,5 @@
-/** Fields that may contain trusted HTML (e.g. CRM vehicle descriptions). */
-const HTML_ALLOWED_KEYS = new Set(["description"]);
+/** Fields that may contain trusted HTML (e.g. CRM vehicle descriptions, email templates). */
+const HTML_ALLOWED_KEYS = new Set(["description", "body_html"]);
 
 function sanitizeString(value, { allowHtml = false } = {}) {
   if (typeof value !== "string") return value;

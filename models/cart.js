@@ -9,6 +9,10 @@ module.exports = (sequelize, DataTypes) => {
       Cart.belongsTo(models.CarAbo, { foreignKey: 'carAboId', as: 'car' });
       Cart.belongsTo(models.CarAboColor, { foreignKey: 'colorId', as: 'color' });
       Cart.belongsTo(models.CarAboPrice, { foreignKey: 'priceId', as: 'price' });
+      Cart.hasMany(models.FollowupJob, {
+        foreignKey: "cart_id",
+        as: "followupJobs",
+      });
     }
   }
   Cart.init(

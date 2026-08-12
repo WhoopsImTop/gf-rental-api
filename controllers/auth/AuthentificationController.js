@@ -20,6 +20,7 @@ const {
 const { VerificationCode, PasswordResetCode } = require("../../models");
 const { normalizeCartAccessToken } = require("../../utils/cartAccessToken");
 const { logSecurityEvent } = require("../../services/audit/securityAudit");
+const { scheduleForCart, attachUserToCartJobs } = require("../../services/followup/followupService");
 
 function extractIsoDate(value) {
   if (!value) return null;
@@ -73,6 +74,7 @@ exports.registerUser = async (req, res) => {
 
 exports.requestOtp = async (req, res) => {
   const { email } = req.body;
+  const accessToken = normalizeCartAccessToken(req.body.accessToken);
 
   try {
     const code = crypto.randomInt(100000, 1000000).toString();
@@ -87,6 +89,22 @@ exports.requestOtp = async (req, res) => {
     });
 
     await sendOtpEmail(email, code);
+
+    // Schedule follow-ups already on OTP request (even without name/user yet).
+    // Do not attach userId before verification — only store email on the job.
+    if (accessToken) {
+      try {
+        const cartRow = await Cart.findOne({ where: { accessToken } });
+        if (cartRow && !cartRow.completed) {
+          await scheduleForCart(cartRow.id, { email });
+        }
+      } catch (scheduleError) {
+        console.error(
+          "Follow-up scheduling failed after OTP request:",
+          scheduleError,
+        );
+      }
+    }
 
     res.json({ message: "OTP sent successfully" });
   } catch (error) {
@@ -162,6 +180,13 @@ exports.verifyOtp = async (req, res) => {
     }
 
     await Cart.update({ userId: user.id }, { where: { accessToken } });
+
+    try {
+      await attachUserToCartJobs(cartRow.id, user.id);
+      await scheduleForCart(cartRow.id, { email: emailRaw });
+    } catch (scheduleError) {
+      console.error("Follow-up scheduling failed after OTP:", scheduleError);
+    }
 
     logSecurityEvent({
       req,
@@ -627,6 +652,12 @@ exports.cantamenAuth = async (req, res) => {
       },
       { where: { accessToken } },
     );
+
+    try {
+      await scheduleForCart(cartRow.id);
+    } catch (scheduleError) {
+      console.error("Follow-up scheduling failed after Cantamen auth:", scheduleError);
+    }
 
     logSecurityEvent({
       req,

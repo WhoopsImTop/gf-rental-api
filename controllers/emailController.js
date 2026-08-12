@@ -191,6 +191,7 @@ const VALID_MAIL_TYPES = new Set([
   "contact",
   "feedback",
   "admin_notification",
+  "followup",
 ]);
 
 const VALID_STATUSES = new Set(["sent", "failed", "skipped_dev"]);

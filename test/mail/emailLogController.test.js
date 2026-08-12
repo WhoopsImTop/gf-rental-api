@@ -15,6 +15,7 @@ const VALID_MAIL_TYPES = new Set([
   "contact",
   "feedback",
   "admin_notification",
+  "followup",
 ]);
 
 const VALID_STATUSES = new Set(["sent", "failed", "skipped_dev"]);
@@ -120,6 +121,6 @@ test("getEmailLogById returns log detail", async () => {
 });
 
 test("email log enums stay in sync with model", () => {
-  assert.equal(VALID_MAIL_TYPES.size, 8);
+  assert.equal(VALID_MAIL_TYPES.size, 9);
   assert.equal(VALID_STATUSES.size, 3);
 });

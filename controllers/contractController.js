@@ -22,6 +22,7 @@ const {
   buildContractListWhere,
   createGenericServerErrorResponse,
 } = require("../services/security/accessPolicy");
+const { cancelForCart } = require("../services/followup/followupService");
 
 const SIGN_LINK_VALIDITY_HOURS = 72;
 const SHARE_LINK_VALIDITY_HOURS = 24;
@@ -692,6 +693,8 @@ exports.createContract = async (req, res) => {
         { completed: true },
         { where: { id: Cart.id, accessToken }, transaction },
       );
+
+      await cancelForCart(Cart.id, "cart_completed", { transaction });
 
       const user = await db.User.findOne({
         include: [{ model: db.CustomerDetails, as: "customerDetails" }],
