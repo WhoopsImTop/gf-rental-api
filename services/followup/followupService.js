@@ -48,7 +48,7 @@ function buildCarImageHtml(imageUrl, carName) {
 /** Nameless OTP users get a neutral greeting token. */
 function resolveFirstName(user) {
   const name = String(user?.firstName || "").trim();
-  return name || "";
+  return name || "du";
 }
 
 function resolveRecipient(job) {
@@ -211,13 +211,10 @@ function evaluateCancelReason(rule, cart) {
   }
 
   if (conditions.includes("car_unavailable")) {
-    const car = cart.car;
+    // Only treat as unavailable when the selected color is already ordered.
+    // Lead times (availableInDays / needToBeOrdered) must NOT cancel follow-ups.
     const color = cart.color;
-    const carUnavailable =
-      !car ||
-      car.status !== "available" ||
-      (color && color.isOrdered === true);
-    if (carUnavailable) {
+    if (color && color.isOrdered === true) {
       return "car_unavailable";
     }
   }

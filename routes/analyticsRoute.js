@@ -10,8 +10,30 @@ const analyticsTrackLimiter = rateLimit({
   message: "Too many analytics events from this IP, please try again later",
 });
 
+const checkoutEventLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: "Too many checkout events from this IP, please try again later",
+});
+
+const clientErrorLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: "Too many client error reports from this IP, please try again later",
+});
+
 // Public route for frontend tracking
 router.post('/track', analyticsTrackLimiter, analyticsController.trackVisit);
+router.post(
+  '/checkout-event',
+  checkoutEventLimiter,
+  analyticsController.trackCheckoutEvent,
+);
+router.post(
+  '/client-error',
+  clientErrorLimiter,
+  analyticsController.trackClientError,
+);
 
 // Protected route for CRM dashboard
 router.get('/stats', authenticateToken, analyticsController.getStats);

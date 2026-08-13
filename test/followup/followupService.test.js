@@ -15,19 +15,31 @@ test("evaluateCancelReason returns cart_completed when cart is done", () => {
   assert.equal(reason, "cart_completed");
 });
 
-test("evaluateCancelReason returns car_unavailable when car is reserved", () => {
+test("evaluateCancelReason returns car_unavailable only when color isOrdered", () => {
   const reason = followupService.evaluateCancelReason(
     { cancel_conditions: ["cart_completed", "car_unavailable"] },
     {
       completed: false,
       car: { status: "reserved" },
-      color: { isOrdered: false },
+      color: { isOrdered: true, availableInDays: 10 },
     },
   );
   assert.equal(reason, "car_unavailable");
 });
 
-test("evaluateCancelReason returns null when cart open and car available", () => {
+test("evaluateCancelReason ignores car status and availableInDays", () => {
+  const reason = followupService.evaluateCancelReason(
+    { cancel_conditions: ["cart_completed", "car_unavailable"] },
+    {
+      completed: false,
+      car: { status: "reserved" },
+      color: { isOrdered: false, availableInDays: 10, needToBeOrdered: true },
+    },
+  );
+  assert.equal(reason, null);
+});
+
+test("evaluateCancelReason returns null when cart open and color not ordered", () => {
   const reason = followupService.evaluateCancelReason(
     { cancel_conditions: ["cart_completed", "car_unavailable"] },
     {
@@ -272,8 +284,8 @@ test("processDueJobs cancels when car unavailable without sending mail", async (
     cart: {
       completed: false,
       accessToken: "abc",
-      car: { status: "reserved" },
-      color: { isOrdered: false },
+      car: { status: "available" },
+      color: { isOrdered: true },
     },
     user: { id: 1, email: "a@b.de", firstName: "Ada" },
   });

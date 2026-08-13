@@ -1,8 +1,161 @@
 const requestIp = require('request-ip');
 const geoip = require('geoip-lite');
-const { PageVisit } = require('../models');
+const { PageVisit, Cart, CartCheckoutEvent, CartClientError } = require('../models');
 const { Op } = require('sequelize');
 const sequelize = require('sequelize');
+
+const ALLOWED_EVENT_TYPES = new Set([
+  'step_viewed',
+  'step_completed',
+  'checkout_submitted',
+  'checkout_completed',
+]);
+
+const ALLOWED_STEP_NAMES = new Set([
+  'login',
+  'contact',
+  'confirmation',
+  'payment',
+  'summary',
+]);
+
+const ALLOWED_ERROR_SOURCES = new Set([
+  'vue',
+  'window',
+  'unhandledrejection',
+  'manual',
+  'fetch',
+]);
+
+const FUNNEL_STEPS = [
+  { stepName: 'login', label: 'Anmeldung' },
+  { stepName: 'contact', label: 'Kontaktdaten' },
+  { stepName: 'confirmation', label: 'Bestätigung' },
+  { stepName: 'payment', label: 'Zahlung' },
+  { stepName: 'summary', label: 'Übersicht' },
+  { stepName: 'completed', label: 'Abgeschlossen' },
+];
+
+const truncate = (value, max) => {
+  if (value == null) return null;
+  const str = String(value);
+  return str.length > max ? str.slice(0, max) : str;
+};
+
+const isValidSessionId = (sessionId) =>
+  typeof sessionId === 'string' && /^[a-zA-Z0-9_-]{8,128}$/.test(sessionId);
+
+const isValidAccessToken = (token) =>
+  typeof token === 'string' && /^[a-f0-9]{64}$/i.test(token);
+
+const resolveCartByAccessToken = async (accessToken) => {
+  if (!isValidAccessToken(accessToken)) return null;
+  return Cart.findOne({ where: { accessToken } });
+};
+
+const buildCheckoutFunnelStats = async (sinceDate) => {
+  const db = require('../models');
+  const dbSequelize = db.sequelize;
+  const replacements = { since: sinceDate };
+
+  const funnelSql = `
+    SELECT
+      CASE
+        WHEN eventType = 'checkout_completed' THEN 'completed'
+        ELSE stepName
+      END AS stepKey,
+      COUNT(DISTINCT cartId) AS cartCount
+    FROM CartCheckoutEvents
+    WHERE createdAt >= :since
+      AND cartId IS NOT NULL
+      AND (
+        eventType IN ('step_viewed', 'checkout_completed')
+        OR (eventType = 'checkout_submitted' AND stepName = 'summary')
+      )
+      AND (
+        eventType = 'checkout_completed'
+        OR stepName IN ('login', 'contact', 'confirmation', 'payment', 'summary')
+      )
+    GROUP BY stepKey
+  `;
+
+  const [rows] = await dbSequelize.query(funnelSql, { replacements });
+  const countByStep = {};
+  for (const row of rows || []) {
+    countByStep[row.stepKey] = Number(row.cartCount) || 0;
+  }
+
+  const steps = FUNNEL_STEPS.map((step, index) => {
+    const count = countByStep[step.stepName] || 0;
+    const prevCount =
+      index === 0 ? count : countByStep[FUNNEL_STEPS[index - 1].stepName] || 0;
+    const dropOffRate =
+      index === 0 || prevCount === 0
+        ? 0
+        : Math.max(0, ((prevCount - count) / prevCount) * 100);
+    return {
+      stepName: step.stepName,
+      label: step.label,
+      cartCount: count,
+      dropOffRate,
+    };
+  });
+
+  return { steps };
+};
+
+const buildClientErrorStats = async (sinceDate) => {
+  const db = require('../models');
+  const dbSequelize = db.sequelize;
+
+  const [countRows] = await dbSequelize.query(
+    `
+      SELECT COUNT(DISTINCT cartId) AS cartsWithErrors
+      FROM CartClientErrors
+      WHERE createdAt >= :since
+        AND cartId IS NOT NULL
+    `,
+    { replacements: { since: sinceDate } },
+  );
+  const cartsWithErrors = Number(countRows?.[0]?.cartsWithErrors) || 0;
+
+  const recentErrorsSql = `
+    SELECT
+      c.id AS cartId,
+      c.lastCheckoutStep AS lastCheckoutStep,
+      c.clientErrorCount AS clientErrorCount,
+      e.message AS lastErrorMessage,
+      e.createdAt AS lastErrorAt
+    FROM Carts c
+    INNER JOIN (
+      SELECT cartId, MAX(id) AS maxId
+      FROM CartClientErrors
+      WHERE cartId IS NOT NULL AND createdAt >= :since
+      GROUP BY cartId
+    ) latest ON latest.cartId = c.id
+    INNER JOIN CartClientErrors e ON e.id = latest.maxId
+    WHERE c.clientErrorCount > 0
+    ORDER BY e.createdAt DESC
+    LIMIT 15
+  `;
+
+  const [recentRows] = await dbSequelize.query(recentErrorsSql, {
+    replacements: { since: sinceDate },
+  });
+
+  const recentCartsWithErrors = (recentRows || []).map((row) => ({
+    cartId: row.cartId,
+    lastCheckoutStep: row.lastCheckoutStep || null,
+    clientErrorCount: Number(row.clientErrorCount) || 0,
+    lastErrorMessage: truncate(row.lastErrorMessage, 200),
+    lastErrorAt: row.lastErrorAt,
+  }));
+
+  return {
+    cartsWithErrors,
+    recentCartsWithErrors,
+  };
+};
 
 const buildCartStats = async (sinceDate) => {
   const db = require('../models');
@@ -118,6 +271,8 @@ const buildCartStats = async (sinceDate) => {
     depositProvidedCountCompleted,
     topVehicles,
     topMileageDuration,
+    checkoutFunnel: await buildCheckoutFunnelStats(sinceDate),
+    clientErrors: await buildClientErrorStats(sinceDate),
   };
 };
 
@@ -171,6 +326,145 @@ exports.trackVisit = async (req, res) => {
     res.status(200).json({ message: 'Visit tracked successfully' });
   } catch (error) {
     console.error('Error tracking visit:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+exports.trackCheckoutEvent = async (req, res) => {
+  try {
+    const {
+      accessToken,
+      sessionId,
+      eventType,
+      stepId,
+      stepName,
+      pageUrl,
+    } = req.body || {};
+
+    if (!ALLOWED_EVENT_TYPES.has(eventType)) {
+      return res.status(400).json({ error: 'Invalid eventType' });
+    }
+
+    if (sessionId != null && !isValidSessionId(sessionId)) {
+      return res.status(400).json({ error: 'Invalid sessionId' });
+    }
+
+    if (
+      stepName != null &&
+      stepName !== '' &&
+      !ALLOWED_STEP_NAMES.has(stepName)
+    ) {
+      return res.status(400).json({ error: 'Invalid stepName' });
+    }
+
+    if (pageUrl != null && (typeof pageUrl !== 'string' || pageUrl.length > 2048)) {
+      return res.status(400).json({ error: 'Invalid pageUrl' });
+    }
+
+    let parsedStepId = null;
+    if (stepId != null && stepId !== '') {
+      parsedStepId = Number(stepId);
+      if (!Number.isInteger(parsedStepId) || parsedStepId < 1 || parsedStepId > 10) {
+        return res.status(400).json({ error: 'Invalid stepId' });
+      }
+    }
+
+    const cart = await resolveCartByAccessToken(accessToken);
+    const resolvedToken = cart?.accessToken || (isValidAccessToken(accessToken) ? accessToken : null);
+
+    await CartCheckoutEvent.create({
+      cartId: cart?.id || null,
+      accessToken: resolvedToken,
+      sessionId: sessionId || null,
+      eventType,
+      stepId: parsedStepId,
+      stepName: stepName || null,
+      pageUrl: truncate(pageUrl, 2048),
+    });
+
+    if (cart) {
+      const updates = {};
+      if (
+        (eventType === 'step_viewed' || eventType === 'step_completed') &&
+        stepName
+      ) {
+        updates.lastCheckoutStep = stepName;
+      }
+      if (eventType === 'checkout_submitted') {
+        updates.lastCheckoutStep = 'summary';
+      }
+      if (eventType === 'checkout_completed') {
+        updates.lastCheckoutStep = 'completed';
+      }
+      if (Object.keys(updates).length > 0) {
+        await cart.update(updates);
+      }
+    }
+
+    res.status(200).json({ message: 'Checkout event tracked' });
+  } catch (error) {
+    console.error('Error tracking checkout event:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+exports.trackClientError = async (req, res) => {
+  try {
+    const {
+      accessToken,
+      sessionId,
+      message,
+      stack,
+      source,
+      pageUrl,
+      stepName,
+      userAgent,
+    } = req.body || {};
+
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Missing message' });
+    }
+
+    if (sessionId != null && !isValidSessionId(sessionId)) {
+      return res.status(400).json({ error: 'Invalid sessionId' });
+    }
+
+    const errorSource = ALLOWED_ERROR_SOURCES.has(source) ? source : 'window';
+
+    if (
+      stepName != null &&
+      stepName !== '' &&
+      !ALLOWED_STEP_NAMES.has(stepName)
+    ) {
+      return res.status(400).json({ error: 'Invalid stepName' });
+    }
+
+    if (pageUrl != null && (typeof pageUrl !== 'string' || pageUrl.length > 2048)) {
+      return res.status(400).json({ error: 'Invalid pageUrl' });
+    }
+
+    const cart = await resolveCartByAccessToken(accessToken);
+    const resolvedToken = cart?.accessToken || (isValidAccessToken(accessToken) ? accessToken : null);
+
+    await CartClientError.create({
+      cartId: cart?.id || null,
+      accessToken: resolvedToken,
+      sessionId: sessionId || null,
+      message: truncate(message, 1024),
+      stack: truncate(stack, 8000),
+      source: errorSource,
+      pageUrl: truncate(pageUrl, 2048),
+      stepName: stepName || null,
+      userAgent: truncate(userAgent, 512),
+    });
+
+    if (cart) {
+      await cart.increment('clientErrorCount');
+    }
+
+    res.status(200).json({ message: 'Client error tracked' });
+  } catch (error) {
+    console.error('Error tracking client error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

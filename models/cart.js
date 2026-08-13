@@ -13,6 +13,14 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "cart_id",
         as: "followupJobs",
       });
+      Cart.hasMany(models.CartCheckoutEvent, {
+        foreignKey: "cartId",
+        as: "checkoutEvents",
+      });
+      Cart.hasMany(models.CartClientError, {
+        foreignKey: "cartId",
+        as: "clientErrors",
+      });
     }
   }
   Cart.init(
@@ -63,6 +71,15 @@ module.exports = (sequelize, DataTypes) => {
       calculatedMonthlyPrice: {
         type: DataTypes.INTEGER,
         allowNull: true,
+      },
+      lastCheckoutStep: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+      clientErrorCount: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
       },
       //virtual field if user was synced from cantamen
     },
