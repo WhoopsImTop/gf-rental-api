@@ -77,6 +77,9 @@ module.exports = (sequelize, DataTypes) => {
       milage: DataTypes.INTEGER,
       modelYear: DataTypes.INTEGER,
       status: DataTypes.ENUM("available", "reserved", "unavailable"),
+      // Public vehicles are listed in /subscribe and the public listings.
+      // Private vehicles are only reachable via their direct link (/car-abos/:id).
+      visibility: DataTypes.ENUM("public", "private"),
       offerType: DataTypes.ENUM("subscription", "purchase"),
       mediaId: DataTypes.INTEGER,
       parkingAids: DataTypes.STRING,

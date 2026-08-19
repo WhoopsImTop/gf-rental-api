@@ -48,6 +48,11 @@ const isValidSessionId = (sessionId) =>
 const isValidAccessToken = (token) =>
   typeof token === 'string' && /^[a-f0-9]{64}$/i.test(token);
 
+const isIgnoredBrowserNoise = (message) =>
+  /ResizeObserver loop (limit exceeded|completed with undelivered notifications)/i.test(
+    String(message || ''),
+  );
+
 const resolveCartByAccessToken = async (accessToken) => {
   if (!isValidAccessToken(accessToken)) return null;
   return Cart.findOne({ where: { accessToken } });
@@ -423,6 +428,10 @@ exports.trackClientError = async (req, res) => {
 
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Missing message' });
+    }
+
+    if (isIgnoredBrowserNoise(message)) {
+      return res.status(200).json({ message: 'Client error ignored' });
     }
 
     if (sessionId != null && !isValidSessionId(sessionId)) {

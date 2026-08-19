@@ -371,6 +371,7 @@ exports.createCarAbo = async (req, res) => {
 exports.findAllCarAbos = async (req, res) => {
   try {
     const carAbos = await db.CarAbo.findAll({
+      where: { visibility: "public" },
       include: carAboIncludes,
       order: [
         ["id", "ASC"],
@@ -446,6 +447,7 @@ exports.findAllCarAboAdmin = async (req, res) => {
 exports.findAvailableCarAbos = async (req, res) => {
   try {
     const carAbos = await db.CarAbo.findAll({
+      where: { visibility: "public" },
       include: [
         { model: db.CarAboPrice, as: "prices" },
         {

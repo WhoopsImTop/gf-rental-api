@@ -30,7 +30,7 @@ exports.getVehicleSitemap = async (req, res) => {
     });
 
     const base = frontendBaseUrl.replace(/\/+$/, "");
-    const staticSlugs = ["", "subscribe", "business"];
+    const staticSlugs = ["", "subscribe", "business", "camper-abo", "faqs"];
     const staticNow = new Date().toISOString();
 
     const staticEntries = staticSlugs
