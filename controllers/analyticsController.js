@@ -48,10 +48,16 @@ const isValidSessionId = (sessionId) =>
 const isValidAccessToken = (token) =>
   typeof token === 'string' && /^[a-f0-9]{64}$/i.test(token);
 
+const IGNORED_ERROR_PATTERNS = [
+  /ResizeObserver loop (limit exceeded|completed with undelivered notifications)/i,
+  /r\["@context"\]\.toLowerCase/i,
+  /^\{\s*"isTrusted"\s*:\s*true\s*\}$/,
+  /^Script error\.?$/i,
+  /^Seite nicht gefunden/i,
+];
+
 const isIgnoredBrowserNoise = (message) =>
-  /ResizeObserver loop (limit exceeded|completed with undelivered notifications)/i.test(
-    String(message || ''),
-  );
+  IGNORED_ERROR_PATTERNS.some((pattern) => pattern.test(String(message || '')));
 
 const resolveCartByAccessToken = async (accessToken) => {
   if (!isValidAccessToken(accessToken)) return null;
