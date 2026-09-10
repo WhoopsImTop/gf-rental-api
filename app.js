@@ -13,6 +13,7 @@ const carsharingCarRoute = require("./routes/carsharingCarRoute");
 const uploadRoute = require("./routes/uploadRoute");
 const crmCustomerRoute = require("./routes/crm/customerRoute");
 const statusRoute = require("./routes/crm/statusRoute");
+const chatbotRoute = require("./routes/crm/chatbotRoute");
 const userRoute = require("./routes/general/userRoute");
 const cartRoute = require("./routes/cartRoute");
 const deliveryCostsRoute = require("./routes/deliveryCosts");
@@ -33,8 +34,12 @@ const { requireRole } = require("./middleware/requireRole");
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
 const { authenticateToken } = require("./middleware/authMiddleware");
 const { sanitizeRequestData } = require("./middleware/requestSanitizer");
-const { startAnonymizationScheduler } = require("./services/privacy/anonymizationScheduler");
-const { startFollowupScheduler } = require("./services/followup/followupScheduler");
+const {
+  startAnonymizationScheduler,
+} = require("./services/privacy/anonymizationScheduler");
+const {
+  startFollowupScheduler,
+} = require("./services/followup/followupScheduler");
 const followupRoute = require("./routes/followupRoute");
 
 const serverPort = process.env.SERVERPORT || 3000;
@@ -154,6 +159,7 @@ app.use("/api/reviews", reviewRoute);
 app.use("/api/analytics", analyticsRoute);
 app.use("/api/business/contact", contactRoute);
 app.use("/api/sitemap.xml", sitemapRoute);
+app.use("/api/chatbot", chatbotRoute);
 
 app.use("/api/feedback", feedbackPublicRoute);
 app.use(
