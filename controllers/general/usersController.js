@@ -32,6 +32,10 @@ exports.updateCrmUser = async (req, res) => {
       return res.status(403).json({ message: "Only administrators can change user roles" });
     }
 
+    if (user.role !== "CUSTOMER" && req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Only administrators can edit staff accounts" });
+    }
+
     const previousRole = user.role;
 
     const updateData = {};
