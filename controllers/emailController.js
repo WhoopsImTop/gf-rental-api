@@ -76,7 +76,7 @@ exports.resendConfirmation = async (req, res) => {
     });
     const emailContent = `
       <p>Hallo ${escapeHtml(user.firstName)},</p>
-      <p>Hiermit bestätigen wir Ihr Abo Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
+      <p>Hiermit bestätigen wir Ihr Auto Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
       <p><strong>Um die Übergabe zu erleichtern, schicken Sie uns Bitte eine Kopie der Vorder- und Rückseite ihres Personalausweises und Führerscheins zu.</strong></p>
       <p><a href="mailto:info@gruene-flotte-auto-abo.de" style="display: inline-block; background-color: #82ba26; padding: 8px 16px; border-radius: 12px; color: #ffffff; text-decoration: none; font-weight: 900;">info@gruene-flotte-auto-abo.de</a></p>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
@@ -103,7 +103,6 @@ exports.resendConfirmation = async (req, res) => {
           <tr><td style="padding: 8px 16px; margin: 0;">Monatliche Rate</td><td style="padding: 8px 16px; margin: 0;">${contract.monthlyPrice} €</td></tr>
         </tbody>
       </table>
-      <p>Die erste Rate wird in den nächsten Tagen von deinem Konto abgebucht.</p>
       <p>Bei Fragen stehen wir Ihnen jederzeit gerne zur Verfügung.</p>
       <p style="margin-bottom:0">Wir wünschen Ihnen viel Spaß mit Ihrem neuen Auto Abo.<br>
       <strong>Ihr Grüne Flotte Team</strong></p>`;

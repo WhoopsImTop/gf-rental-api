@@ -732,7 +732,7 @@ exports.createContract = async (req, res) => {
       const emailContent = `
 ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" height="auto"/>` : ""}
 <p>Guten Tag ${escapeHtml(user.firstName)} ${escapeHtml(user.lastName)},</p>
-      <p>Hiermit bestätigen wir Ihr Abo Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
+      <p>Hiermit bestätigen wir Ihr Auto Abo. Den Mietvertrag werden wir Ihnen in Kürze per Email senden.</p>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Ihre Daten</h2>
       <table style="width: 100%; border: 1px solid #efefef;">
@@ -804,7 +804,6 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
           Bei der Übergabe muss Führerschein und Personalausweis in Original vorgelegt werden.</li>
         </ol>
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
-      <p>Die erste Rate wird in den nächsten Tagen von deinem Konto abgebucht.</p>
       <p>Bei Fragen stehen wir Ihnen jederzeit gerne zur Verfügung.</p>
       <p style="margin-bottom:0">Wir wünschen Ihnen viel Spaß mit Ihrem neuen Auto Abo.<br>
       <strong>Ihr Grüne Flotte Team</strong></p>`;
