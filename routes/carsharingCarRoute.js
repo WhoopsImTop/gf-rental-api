@@ -5,6 +5,7 @@ const { authorizeRoles } = require("../middleware/authorizationMiddleware");
 const { 
   createCarsharingCar, 
   findAllCarsharingCars, 
+  findAllCarsharingCarsAdmin,
   findOneCarsharingCar, 
   updateCarsharingCar, 
   deleteCarsharingCar,
@@ -16,6 +17,9 @@ const canManageCarsharingCars = [
   authenticateToken,
   authorizeRoles("ADMIN", "SELLER"),
 ];
+
+// Feste Pfade vor "/:id" registrieren
+router.get("/admin", canManageCarsharingCars, findAllCarsharingCarsAdmin);
 
 // Basic CRUD routes
 router.post("/", canManageCarsharingCars, createCarsharingCar);

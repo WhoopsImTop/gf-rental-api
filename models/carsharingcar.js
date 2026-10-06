@@ -11,7 +11,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       // define association here
       CarsharingCar.belongsToMany(models.Media, {
-        through: "carsharingCarsImages",
+        through: models.CarsharingCarsImages,
         foreignKey: "carId",
         otherKey: "mediaId",
         as: "images",
@@ -64,6 +64,28 @@ module.exports = (sequelize, DataTypes) => {
       price: {
         type: DataTypes.FLOAT,
         allowNull: true, // Allow null values
+      },
+      status: {
+        type: DataTypes.ENUM("active", "coming_soon", "hidden"),
+        allowNull: false,
+        defaultValue: "active",
+      },
+      availableFrom: {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
+      },
+      comingSoonText: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      pageEnabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      pageBlocks: {
+        type: DataTypes.JSON,
+        allowNull: true,
       },
     },
     {

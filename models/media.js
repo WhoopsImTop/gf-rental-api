@@ -15,7 +15,7 @@ module.exports = (sequelize, DataTypes) => {
         otherKey: "carAboId",
       });
       Media.belongsToMany(models.CarsharingCar, {
-        through: "carsharingCarsImages",
+        through: models.CarsharingCarsImages,
         foreignKey: "mediaId",
         otherKey: "carId",
         as: "carsharingCars"
