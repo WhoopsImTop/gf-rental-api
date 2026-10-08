@@ -91,15 +91,18 @@ module.exports = (sequelize, DataTypes) => {
       trunkVolume: DataTypes.STRING,
       equipmentPackages: DataTypes.TEXT,
       premiumLine: DataTypes.BOOLEAN,
-      vehicleStatus: DataTypes.ENUM("used", "new"),
+      vehicleStatus: DataTypes.STRING,
       marketingImageDesktop: DataTypes.STRING,
       marketingImageMobile: DataTypes.STRING,
       strikePrice: DataTypes.DECIMAL(10, 2),
+      batteryCapacity: DataTypes.STRING,
+      topSpeed: DataTypes.STRING,
+      drive: DataTypes.STRING,
     },
     {
       sequelize,
       modelName: "CarAbo",
-    }
+    },
   );
   return CarAbo;
 };
