@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../../middleware/authMiddleware");
+const { requireRole } = require("../../middleware/requireRole");
 const {
   loginLimits,
   verifyOtpLimits,
@@ -26,7 +27,8 @@ const {
   logoutUser,
 } = require("../../controllers/auth/AuthentificationController");
 
-router.post("/register", registerUser);
+// Benutzer werden nur von Admins im CRM angelegt (Kunden entstehen im Checkout).
+router.post("/register", authenticateToken, requireRole("ADMIN"), registerUser);
 router.post("/login", ...loginLimits, loginUser);
 
 router.post("/cantamen/authentificate", cantamenAuth);

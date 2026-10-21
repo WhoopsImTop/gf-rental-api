@@ -16,8 +16,11 @@
   "author": "Elias Englen",
   "license": "ISC",
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "acorn": "^8.19.0",
     "axios": "^1.18.0",
     "bcrypt": "^6.0.0",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.4.7",
@@ -39,7 +42,8 @@
     "qrcode": "^1.5.4",
     "request-ip": "^3.3.0",
     "sanitize-html": "^2.18.0",
-    "sequelize": "^6.37.8"
+    "sequelize": "^6.37.8",
+    "turndown": "^7.2.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.9",

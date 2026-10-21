@@ -81,6 +81,15 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: 0,
       },
+      // Traffic-Quelle des Besuchs, aus dem der Warenkorb entstand (z. B. "Instagram").
+      trafficSource: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+      trafficChannel: {
+        type: DataTypes.STRING(32),
+        allowNull: true,
+      },
       //virtual field if user was synced from cantamen
     },
     {

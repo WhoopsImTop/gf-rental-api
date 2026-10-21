@@ -16,7 +16,12 @@ module.exports = (sequelize, DataTypes) => {
   PasswordResetCode.init({
     emailHash: DataTypes.STRING,
     code: DataTypes.STRING,
-    expiresAt: DataTypes.DATE
+    expiresAt: DataTypes.DATE,
+    attempts: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
   }, {
     sequelize,
     modelName: 'PasswordResetCode',

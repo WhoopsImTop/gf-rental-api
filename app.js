@@ -41,6 +41,10 @@ const {
   startFollowupScheduler,
 } = require("./services/followup/followupScheduler");
 const followupRoute = require("./routes/followupRoute");
+const assistantRoute = require("./routes/assistant/assistantRoute");
+const {
+  startAssistantScheduler,
+} = require("./services/assistant/scheduler");
 
 const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
@@ -160,6 +164,12 @@ app.use("/api/analytics", analyticsRoute);
 app.use("/api/business/contact", contactRoute);
 app.use("/api/sitemap.xml", sitemapRoute);
 app.use("/api/chatbot", chatbotRoute);
+app.use(
+  "/api/assistant",
+  authenticateToken,
+  requireRole("ADMIN", "SELLER"),
+  assistantRoute,
+);
 
 app.use("/api/feedback", feedbackPublicRoute);
 app.use(
@@ -184,6 +194,7 @@ app.listen(serverPort, async () => {
     console.log("Datenbankverbindung erfolgreich!");
     startAnonymizationScheduler();
     startFollowupScheduler();
+    startAssistantScheduler();
   } catch (error) {
     console.error("Fehler bei der Verbindung zur Datenbank:", error);
     process.exit(1); // Beende den Prozess, falls die Verbindung fehlschlägt

@@ -3,10 +3,12 @@ const {
   SESSION_MAX_AGE_MS,
   JWT_REFRESH_THRESHOLD_MS,
   setAuthCookie,
+  clearAuthCookie,
   getAuthTokenFromRequest,
 } = require("../services/auth/authCookie");
 const db = require("../models");
 const { logSecurityEvent } = require("../services/audit/securityAudit");
+const { isPrivilegedRole } = require("../services/security/accessPolicy");
 
 /**
  * JWT string rotation is intentionally limited to GET /auth/me (CRM heartbeat).
@@ -78,6 +80,20 @@ async function authenticateToken(req, res, next) {
 
     if (!user) {
       return res.status(403).json({ message: "User not found" });
+    }
+
+    // Nur CRM-Mitarbeiter haben Sessions. Kunden melden sich nirgends an;
+    // evtl. noch vorhandene Kunden-Sessions werden hier entwertet.
+    if (!isPrivilegedRole(user.role)) {
+      await session.destroy();
+      clearAuthCookie(res);
+      logSecurityEvent({
+        req,
+        action: "auth_jwt",
+        outcome: "role_not_allowed",
+        extra: { userId: user.id },
+      });
+      return res.status(403).json({ message: "Access denied" });
     }
 
     const newExpiry = new Date(Date.now() + SESSION_MAX_AGE_MS);

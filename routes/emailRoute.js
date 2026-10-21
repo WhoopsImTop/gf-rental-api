@@ -32,6 +32,7 @@ router.post(
 router.post(
   "/confirmation/resend/:id",
   authenticateToken,
+  requireRole("ADMIN", "SELLER"),
   mailResendConfirmationLimiter,
   resendConfirmation,
 );

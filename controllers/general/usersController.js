@@ -5,6 +5,18 @@ const { createHash } = require("../../services/encryption");
 exports.getCrmUsers = async (req, res) => {
   try {
     const users = await db.User.findAll({
+      // Feste Feldliste: role wird fuer die Benutzerverwaltung im CRM gebraucht
+      // (der defaultScope blendet sie aus), Secrets/Hashes nie ausliefern.
+      attributes: [
+        "id",
+        "firstName",
+        "lastName",
+        "email",
+        "phone",
+        "role",
+        "mfaEnabled",
+        "cantamenCustomerId",
+      ],
       where: {
         role: {
           [Op.in]: ["CUSTOMER", "ADMIN", "SELLER"],
@@ -25,15 +37,22 @@ exports.updateCrmUser = async (req, res) => {
 
     const user = await db.User.scope("withPassword").findByPk(id);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: "Benutzer nicht gefunden." });
     }
 
-    if (role !== undefined && req.user.role !== "ADMIN") {
-      return res.status(403).json({ message: "Only administrators can change user roles" });
+    if (role !== undefined && !["ADMIN", "SELLER", "CUSTOMER"].includes(role)) {
+      return res.status(400).json({ message: "Ungültige Rolle." });
+    }
+
+    // Unveraenderte Rolle im Formular ist keine Rollenaenderung (Seller duerfen Kunden bearbeiten).
+    const roleChanged = role !== undefined && role !== user.role;
+
+    if (roleChanged && req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Nur Admins dürfen Rollen ändern." });
     }
 
     if (user.role !== "CUSTOMER" && req.user.role !== "ADMIN") {
-      return res.status(403).json({ message: "Only administrators can edit staff accounts" });
+      return res.status(403).json({ message: "Nur Admins dürfen Mitarbeiter-Konten bearbeiten." });
     }
 
     const previousRole = user.role;
@@ -42,7 +61,7 @@ exports.updateCrmUser = async (req, res) => {
     if (firstName !== undefined) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
     if (phone !== undefined) updateData.phone = phone;
-    if (role !== undefined) updateData.role = role;
+    if (roleChanged) updateData.role = role;
 
     if (email !== undefined) {
       updateData.email = email;

@@ -39,10 +39,9 @@ exports.resendConfirmation = async (req, res) => {
     if (!contract) {
       return res.status(404).json({ success: false, message: "Contract not found" });
     }
-    const isOwner = contract.userId === req.user.id;
     const isStaff =
       req.user.role === "ADMIN" || req.user.role === "SELLER";
-    if (!isOwner && !isStaff) {
+    if (!isStaff) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 

@@ -2,7 +2,23 @@ const requestIp = require('request-ip');
 const geoip = require('geoip-lite');
 const { PageVisit, Cart, CartCheckoutEvent, CartClientError } = require('../models');
 const { Op } = require('sequelize');
-const sequelize = require('sequelize');
+const {
+  CLICK_SOURCES,
+  DEFAULT_OWN_DOMAINS,
+  classifyTraffic,
+  sanitizeReferrerHost,
+} = require('../services/analytics/trafficSource');
+const { isBot, parseUserAgent } = require('../services/analytics/userAgent');
+const { computeVisitorId } = require('../services/analytics/visitorId');
+const { sanitizePath, sanitizeHostname, sanitizeUtm } = require('../services/analytics/pagePath');
+const { resolveRange, toSqlUtc } = require('../services/analytics/timeRange');
+const { buildDashboardStats } = require('../services/analytics/dashboardStats');
+
+const OWN_DOMAINS = String(process.env.ANALYTICS_OWN_DOMAINS || '')
+  .split(',')
+  .map((d) => d.trim().toLowerCase())
+  .filter(Boolean);
+const ownDomains = OWN_DOMAINS.length ? OWN_DOMAINS : DEFAULT_OWN_DOMAINS;
 
 const ALLOWED_EVENT_TYPES = new Set([
   'step_viewed',
@@ -64,10 +80,10 @@ const resolveCartByAccessToken = async (accessToken) => {
   return Cart.findOne({ where: { accessToken } });
 };
 
-const buildCheckoutFunnelStats = async (sinceDate) => {
+const buildCheckoutFunnelStats = async (sinceDate, untilDate) => {
   const db = require('../models');
   const dbSequelize = db.sequelize;
-  const replacements = { since: sinceDate };
+  const replacements = { since: sinceDate, until: untilDate };
 
   const funnelSql = `
     SELECT
@@ -78,6 +94,7 @@ const buildCheckoutFunnelStats = async (sinceDate) => {
       COUNT(DISTINCT cartId) AS cartCount
     FROM CartCheckoutEvents
     WHERE createdAt >= :since
+      AND createdAt < :until
       AND cartId IS NOT NULL
       AND (
         eventType IN ('step_viewed', 'checkout_completed')
@@ -115,7 +132,7 @@ const buildCheckoutFunnelStats = async (sinceDate) => {
   return { steps };
 };
 
-const buildClientErrorStats = async (sinceDate) => {
+const buildClientErrorStats = async (sinceDate, untilDate) => {
   const db = require('../models');
   const dbSequelize = db.sequelize;
 
@@ -124,9 +141,10 @@ const buildClientErrorStats = async (sinceDate) => {
       SELECT COUNT(DISTINCT cartId) AS cartsWithErrors
       FROM CartClientErrors
       WHERE createdAt >= :since
+        AND createdAt < :until
         AND cartId IS NOT NULL
     `,
-    { replacements: { since: sinceDate } },
+    { replacements: { since: sinceDate, until: untilDate } },
   );
   const cartsWithErrors = Number(countRows?.[0]?.cartsWithErrors) || 0;
 
@@ -141,7 +159,7 @@ const buildClientErrorStats = async (sinceDate) => {
     INNER JOIN (
       SELECT cartId, MAX(id) AS maxId
       FROM CartClientErrors
-      WHERE cartId IS NOT NULL AND createdAt >= :since
+      WHERE cartId IS NOT NULL AND createdAt >= :since AND createdAt < :until
       GROUP BY cartId
     ) latest ON latest.cartId = c.id
     INNER JOIN CartClientErrors e ON e.id = latest.maxId
@@ -151,7 +169,7 @@ const buildClientErrorStats = async (sinceDate) => {
   `;
 
   const [recentRows] = await dbSequelize.query(recentErrorsSql, {
-    replacements: { since: sinceDate },
+    replacements: { since: sinceDate, until: untilDate },
   });
 
   const recentCartsWithErrors = (recentRows || []).map((row) => ({
@@ -168,11 +186,11 @@ const buildClientErrorStats = async (sinceDate) => {
   };
 };
 
-const buildCartStats = async (sinceDate) => {
+const buildCartStats = async (sinceDate, untilDate, timeframeLabel) => {
   const db = require('../models');
   const dbSequelize = db.sequelize;
 
-  const replacements = { since: sinceDate };
+  const replacements = { since: sinceDate, until: untilDate };
 
   const summarySql = `
     SELECT
@@ -183,7 +201,7 @@ const buildCartStats = async (sinceDate) => {
       AVG(CASE WHEN completed = 1 AND depositValue IS NOT NULL THEN depositValue ELSE NULL END) AS avgDepositValueCompleted,
       SUM(CASE WHEN completed = 1 AND depositValue IS NOT NULL THEN 1 ELSE 0 END) AS depositProvidedCountCompleted
     FROM Carts
-    WHERE createdAt >= :since
+    WHERE createdAt >= :since AND createdAt < :until
   `;
 
   const topVehiclesSql = `
@@ -196,7 +214,7 @@ const buildCartStats = async (sinceDate) => {
       AVG(CASE WHEN c.completed = 1 AND c.depositValue IS NOT NULL THEN c.depositValue ELSE NULL END) AS avgDepositValueCompleted
     FROM Carts c
     LEFT JOIN CarAbos car ON car.id = c.carAboId
-    WHERE c.createdAt >= :since
+    WHERE c.createdAt >= :since AND c.createdAt < :until
     GROUP BY c.carAboId, car.displayName
     ORDER BY startedCount DESC
     LIMIT 10
@@ -211,7 +229,7 @@ const buildCartStats = async (sinceDate) => {
       AVG(CASE WHEN c.depositValue IS NOT NULL THEN c.depositValue ELSE NULL END) AS avgDepositValueStarted
     FROM Carts c
     INNER JOIN CarAboPrices p ON p.id = c.priceId
-    WHERE c.createdAt >= :since
+    WHERE c.createdAt >= :since AND c.createdAt < :until
     GROUP BY p.durationMonths, p.mileageKm
     ORDER BY startedCount DESC
     LIMIT 10
@@ -272,7 +290,7 @@ const buildCartStats = async (sinceDate) => {
   });
 
   return {
-    timeframeDays: 30,
+    timeframeLabel,
     totalStartedCarts: totalStarted,
     totalCompletedCarts: totalCompleted,
     completionRate,
@@ -282,62 +300,197 @@ const buildCartStats = async (sinceDate) => {
     depositProvidedCountCompleted,
     topVehicles,
     topMileageDuration,
-    checkoutFunnel: await buildCheckoutFunnelStats(sinceDate),
-    clientErrors: await buildClientErrorStats(sinceDate),
+    checkoutFunnel: await buildCheckoutFunnelStats(sinceDate, untilDate),
+    clientErrors: await buildClientErrorStats(sinceDate, untilDate),
   };
+};
+
+const PAGEVIEW_ID_PATTERN = /^[a-f0-9]{32}$/;
+
+const parseTrackBody = (body) => {
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return null;
+    }
+  }
+  return body && typeof body === 'object' ? body : null;
+};
+
+const getClientContext = (req) => {
+  const userAgent = String(req.headers['user-agent'] || '').slice(0, 512);
+  const clientIp = requestIp.getClientIp(req) || req.ip || '';
+  return { userAgent, clientIp };
+};
+
+/**
+ * Erste Quelle des Besuchers am heutigen Tag. Ein späterer externer Besuch
+ * ersetzt eine "Direkt"-Zuordnung (erste nicht-direkte Quelle gewinnt).
+ */
+const resolveSessionAttribution = async (visitorId, attribution, utm) => {
+  const firstVisit = await PageVisit.findOne({
+    where: { session_id: visitorId },
+    order: [['id', 'ASC']],
+    attributes: ['source', 'channel', 'campaign', 'utm_source', 'utm_medium'],
+  });
+
+  if (!firstVisit || !firstVisit.source) return { ...attribution, ...utm };
+
+  if (firstVisit.channel === 'Direkt' && attribution.channel !== 'Direkt') {
+    await PageVisit.update(
+      { ...attribution, ...utm },
+      { where: { session_id: visitorId } },
+    );
+    return { ...attribution, ...utm };
+  }
+
+  return {
+    source: firstVisit.source,
+    channel: firstVisit.channel,
+    campaign: firstVisit.campaign,
+    utm_source: firstVisit.utm_source,
+    utm_medium: firstVisit.utm_medium,
+  };
+};
+
+const trackEngagement = async (body) => {
+  const pageviewId = body.pageview_id;
+  const dur = Math.round(Number(body.duration_seconds));
+  if (typeof pageviewId !== 'string' || !PAGEVIEW_ID_PATTERN.test(pageviewId)) {
+    return { status: 400, error: 'Invalid pageview_id' };
+  }
+  if (!Number.isFinite(dur) || dur < 0 || dur > 86400) {
+    return { status: 400, error: 'Invalid duration_seconds' };
+  }
+
+  await PageVisit.update(
+    { duration_seconds: dur },
+    {
+      where: {
+        pageview_id: pageviewId,
+        visited_at: { [Op.gte]: new Date(Date.now() - 86400000) },
+        [Op.or]: [
+          { duration_seconds: null },
+          { duration_seconds: { [Op.lt]: dur } },
+        ],
+      },
+    },
+  );
+  return { status: 202 };
+};
+
+const trackPageview = async (req, body) => {
+  const { userAgent, clientIp } = getClientContext(req);
+
+  // Altes Format (gecachte Clients): eine Zeile pro verlassener Seite.
+  const isLegacy = body.type == null && body.page_url != null;
+
+  const path = sanitizePath(isLegacy ? body.page_url : body.path);
+  if (!path) return { status: 400, error: 'Invalid path' };
+
+  let pageviewId = null;
+  if (!isLegacy) {
+    if (typeof body.pageview_id !== 'string' || !PAGEVIEW_ID_PATTERN.test(body.pageview_id)) {
+      return { status: 400, error: 'Invalid pageview_id' };
+    }
+    pageviewId = body.pageview_id;
+  }
+
+  let duration = 0;
+  if (isLegacy) {
+    duration = Math.round(Number(body.duration_seconds));
+    if (!Number.isFinite(duration) || duration < 0 || duration > 86400) {
+      return { status: 400, error: 'Invalid duration_seconds' };
+    }
+  }
+
+  const clickSource =
+    typeof body.click_source === 'string' && CLICK_SOURCES[body.click_source]
+      ? body.click_source
+      : null;
+  const utm = {
+    utm_source: sanitizeUtm(body.utm_source),
+    utm_medium: sanitizeUtm(body.utm_medium),
+    campaign: sanitizeUtm(isLegacy ? body.campaign : body.utm_campaign, 255),
+  };
+
+  const attribution = classifyTraffic({
+    referrerHost: sanitizeReferrerHost(body.referrer),
+    utmSource: utm.utm_source || (isLegacy ? utm.campaign : null),
+    utmMedium: utm.utm_medium,
+    clickSource,
+    userAgent,
+    ownDomains,
+  });
+
+  const visitorId = await computeVisitorId(clientIp, userAgent);
+  const sessionAttribution = await resolveSessionAttribution(visitorId, attribution, utm);
+
+  const geo = clientIp ? geoip.lookup(clientIp) : null;
+  const { device, browser, os } = parseUserAgent(userAgent);
+
+  await PageVisit.create({
+    session_id: visitorId,
+    pageview_id: pageviewId,
+    ip_address: null,
+    country: geo?.country || 'Unknown',
+    city: geo?.city ? truncate(geo.city, 128) : null,
+    hostname: sanitizeHostname(body.hostname),
+    referrer: attribution.channel === 'Direkt' ? null : sanitizeReferrerHost(body.referrer),
+    source: sessionAttribution.source,
+    channel: sessionAttribution.channel,
+    utm_source: sessionAttribution.utm_source || null,
+    utm_medium: sessionAttribution.utm_medium || null,
+    campaign: sessionAttribution.campaign || null,
+    device,
+    browser,
+    os,
+    page_url: path,
+    duration_seconds: duration,
+    visited_at: new Date(),
+  });
+
+  return { status: 202 };
 };
 
 exports.trackVisit = async (req, res) => {
   try {
-    const { session_id, page_url, duration_seconds, referrer, campaign } = req.body;
+    const body = parseTrackBody(req.body);
+    if (!body) return res.status(400).json({ error: 'Invalid payload' });
 
-    if (!session_id || !page_url || duration_seconds === undefined) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+    // Bots, Crawler und Link-Vorschauen nicht zählen.
+    if (isBot(req.headers['user-agent'])) return res.status(202).end();
 
-    if (typeof session_id !== "string" || !/^[a-zA-Z0-9_-]{8,128}$/.test(session_id)) {
-      return res.status(400).json({ error: "Invalid session_id" });
-    }
-    if (typeof page_url !== "string" || page_url.length > 2048) {
-      return res.status(400).json({ error: "Invalid page_url" });
-    }
-    const dur = Number(duration_seconds);
-    if (!Number.isFinite(dur) || dur < 0 || dur > 86400) {
-      return res.status(400).json({ error: "Invalid duration_seconds" });
-    }
-    if (referrer != null && typeof referrer === "string" && referrer.length > 2048) {
-      return res.status(400).json({ error: "Invalid referrer" });
-    }
-    if (campaign != null && typeof campaign === "string" && campaign.length > 256) {
-      return res.status(400).json({ error: "Invalid campaign" });
-    }
+    const result =
+      body.type === 'engagement'
+        ? await trackEngagement(body)
+        : await trackPageview(req, body);
 
-    // Get IP address
-    const clientIp = requestIp.getClientIp(req) || req.ip || '127.0.0.1';
-
-    // Determine country
-    const geo = geoip.lookup(clientIp);
-    const country = geo ? geo.country : 'Unknown';
-
-    //anonymize ip address
-    const anonymizedIp = 'xxx.xxx.xxx.xxx';
-
-    // Save to database
-    await PageVisit.create({
-      session_id,
-      ip_address: anonymizedIp,
-      country,
-      referrer: referrer || null,
-      campaign: campaign || null,
-      page_url,
-      duration_seconds: dur,
-      visited_at: new Date()
-    });
-
-    res.status(200).json({ message: 'Visit tracked successfully' });
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    res.status(result.status).end();
   } catch (error) {
     console.error('Error tracking visit:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/** Ordnet einen Warenkorb der Traffic-Quelle des heutigen Besuchs zu. */
+const resolveCartAttribution = async (req) => {
+  try {
+    const { userAgent, clientIp } = getClientContext(req);
+    if (isBot(userAgent)) return null;
+    const visitorId = await computeVisitorId(clientIp, userAgent);
+    const firstVisit = await PageVisit.findOne({
+      where: { session_id: visitorId },
+      order: [['id', 'ASC']],
+      attributes: ['source', 'channel'],
+    });
+    if (!firstVisit?.source) return null;
+    return { trafficSource: firstVisit.source, trafficChannel: firstVisit.channel };
+  } catch (error) {
+    console.error('Error resolving cart attribution:', error);
+    return null;
   }
 };
 
@@ -406,6 +559,9 @@ exports.trackCheckoutEvent = async (req, res) => {
       }
       if (eventType === 'checkout_completed') {
         updates.lastCheckoutStep = 'completed';
+      }
+      if (!cart.trafficSource) {
+        Object.assign(updates, (await resolveCartAttribution(req)) || {});
       }
       if (Object.keys(updates).length > 0) {
         await cart.update(updates);
@@ -484,156 +640,23 @@ exports.trackClientError = async (req, res) => {
   }
 };
 
+const parseFilterValue = (value) =>
+  typeof value === 'string' && value.trim() && value.length <= 64 ? value.trim() : null;
+
 exports.getStats = async (req, res) => {
   try {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const range = resolveRange(req.query.range);
+    const filter = {
+      source: parseFilterValue(req.query.source),
+      channel: parseFilterValue(req.query.channel),
+    };
 
-    // 1. Visitors (unique session_ids)
-    const totalVisitorsCount = await PageVisit.count({
-      distinct: true,
-      col: 'session_id'
-    });
+    const [dashboard, cartStats] = await Promise.all([
+      buildDashboardStats(range, filter),
+      buildCartStats(toSqlUtc(range.from), toSqlUtc(range.to), range.label),
+    ]);
 
-    // 2. Orders (Contracts in last 30 days)
-    const { Contract } = require('../models');
-    const totalOrders = await Contract.count({
-      where: {
-        createdAt: {
-          [Op.gte]: thirtyDaysAgo
-        }
-      }
-    });
-
-    // 3. Revenue (Sum of monthlyPrice for those Contracts)
-    const totalRevenueRow = await Contract.findOne({
-      attributes: [
-        [sequelize.fn('SUM', sequelize.col('monthlyPrice')), 'total_revenue']
-      ],
-      where: {
-        createdAt: {
-          [Op.gte]: thirtyDaysAgo
-        }
-      }
-    });
-    const totalRevenue = totalRevenueRow ? parseFloat(totalRevenueRow.get('total_revenue') || 0) : 0;
-
-    // 4. Conversion Rate
-    const conversionRate = totalVisitorsCount > 0 ? ((totalOrders / totalVisitorsCount) * 100).toFixed(2) : 0;
-
-    // 5. Revenue / Visitor
-    const revenuePerVisitor = totalVisitorsCount > 0 ? (totalRevenue / totalVisitorsCount).toFixed(2) : 0;
-
-    // 6. Bounce rate & Avg Session Time
-    const totalHits = await PageVisit.count();
-    const bounces = await PageVisit.count({
-      where: {
-        duration_seconds: {
-          [Op.lt]: 5
-        }
-      }
-    });
-    const bounceRate = totalHits > 0 ? ((bounces / totalHits) * 100).toFixed(1) : 0;
-
-    const avgDurationRow = await PageVisit.findOne({
-      attributes: [
-        [sequelize.fn('AVG', sequelize.col('duration_seconds')), 'average_duration']
-      ]
-    });
-    const averageDuration = avgDurationRow ? parseFloat(avgDurationRow.get('average_duration') || 0).toFixed(0) : 0;
-
-    // 7. Online (Visits in last 5 min)
-    const currentOnline = await PageVisit.count({
-      where: {
-        visited_at: {
-          [Op.gte]: fiveMinutesAgo
-        }
-      },
-      distinct: true,
-      col: 'session_id'
-    });
-
-    // 8. Chart Data (Grouped by date for last 30 days)
-    const visitorsOverTime = await PageVisit.findAll({
-      attributes: [
-        [sequelize.fn('DATE', sequelize.col('visited_at')), 'date'],
-        [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('session_id'))), 'count']
-      ],
-      where: {
-        visited_at: {
-          [Op.gte]: thirtyDaysAgo
-        }
-      },
-      group: [sequelize.fn('DATE', sequelize.col('visited_at'))],
-      order: [[sequelize.literal('date'), 'ASC']]
-    });
-
-    const ordersOverTime = await Contract.findAll({
-      attributes: [
-        [sequelize.fn('DATE', sequelize.col('createdAt')), 'date'],
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
-      ],
-      where: {
-        createdAt: {
-          [Op.gte]: thirtyDaysAgo
-        }
-      },
-      group: [sequelize.fn('DATE', sequelize.col('createdAt'))],
-      order: [[sequelize.literal('date'), 'ASC']]
-    });
-
-    // 9. Tables: Referrers, Campaigns, Countries
-    const referrers = await PageVisit.findAll({
-      attributes: [
-        [sequelize.literal('IFNULL(referrer, "Direct/None")'), 'name'],
-        [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('session_id'))), 'count']
-      ],
-      group: ['name'],
-      order: [[sequelize.literal('count'), 'DESC']],
-      limit: 10
-    });
-
-    const campaigns = await PageVisit.findAll({
-      attributes: [
-        [sequelize.literal('IFNULL(campaign, "Organic/None")'), 'name'],
-        [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('session_id'))), 'count']
-      ],
-      group: ['name'],
-      order: [[sequelize.literal('count'), 'DESC']],
-      limit: 10
-    });
-
-    const countries = await PageVisit.findAll({
-      attributes: [
-        [sequelize.col('country'), 'name'],
-        [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('session_id'))), 'count']
-      ],
-      group: ['country'],
-      order: [[sequelize.literal('count'), 'DESC']],
-      limit: 10
-    });
-
-    const cartStats = await buildCartStats(thirtyDaysAgo);
-
-    res.status(200).json({
-      totalVisitors: totalVisitorsCount,
-      totalOrders,
-      totalRevenue,
-      conversionRate,
-      revenuePerVisitor,
-      bounceRate,
-      averageDuration,
-      currentOnline,
-      chart: {
-        visitors: visitorsOverTime,
-        orders: ordersOverTime
-      },
-      referrers,
-      campaigns,
-      countries,
-      cartStats,
-    });
+    res.status(200).json({ ...dashboard, cartStats });
   } catch (error) {
     console.error('Error getting analytics stats:', error);
     res.status(500).json({ error: 'Internal server error' });

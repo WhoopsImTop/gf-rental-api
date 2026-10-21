@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
+const { Op } = require("sequelize");
 const QRCode = require("qrcode");
 const { generateSecret: generateTotpSecret, verifyCode: verifyTotpCode, generateURI: generateTotpURI } = require("../../services/auth/totpService");
 const { createToken, createMfaToken, verifyToken } = require("../../services/auth/tokenService");
@@ -19,6 +20,39 @@ const {
 } = require("../../services/auth/cantamen");
 const { VerificationCode, PasswordResetCode } = require("../../models");
 const { normalizeCartAccessToken } = require("../../utils/cartAccessToken");
+const {
+  isSixDigitCode,
+  isNonEmptyString,
+  isValidNewPassword,
+} = require("../../utils/authInput");
+const { isPrivilegedRole } = require("../../services/security/accessPolicy");
+
+// Rollen, die ein Admin im CRM beim Anlegen vergeben kann (siehe gf_crm pages/users.vue).
+const ASSIGNABLE_ROLES = ["ADMIN", "SELLER", "CUSTOMER"];
+
+// Nach so vielen Fehlversuchen sind alle offenen Codes einer E-Mail ungueltig.
+const MAX_CODE_ATTEMPTS = 5;
+
+/**
+ * Sucht einen gueltigen OTP-/Reset-Code (nicht abgelaufen, Versuche nicht aufgebraucht).
+ * Ein falscher Code zaehlt als Fehlversuch fuer alle offenen Codes dieser E-Mail.
+ */
+async function findUsableCode(CodeModel, emailHash, code) {
+  const match = await CodeModel.findOne({
+    where: {
+      emailHash,
+      code,
+      expiresAt: { [Op.gt]: new Date() },
+      attempts: { [Op.lt]: MAX_CODE_ATTEMPTS },
+    },
+    order: [["createdAt", "DESC"]],
+  });
+
+  if (!match) {
+    await CodeModel.increment("attempts", { where: { emailHash } });
+  }
+  return match;
+}
 const { logSecurityEvent } = require("../../services/audit/securityAudit");
 const { scheduleForCart, attachUserToCartJobs } = require("../../services/followup/followupService");
 
@@ -28,16 +62,25 @@ function extractIsoDate(value) {
   return match ? match[1] : null;
 }
 
-async function createUserSession(user) {
-  await Session.destroy({ where: { userId: user.id } });
-  const token = createToken({ userId: user.id, role: user.role });
-  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
-  await Session.create({ userId: user.id, token, expiresAt });
-  return token;
-}
 
 exports.registerUser = async (req, res) => {
-  const { firstName, lastName, email, phone, password, role } = req.body;
+  const { firstName, lastName, email, phone, password } = req.body;
+  // Route ist nur fuer ADMIN erreichbar; ohne Angabe bleibt es wie bisher bei CUSTOMER.
+  const role = req.body.role === undefined ? "CUSTOMER" : req.body.role;
+
+  if (!ASSIGNABLE_ROLES.includes(role)) {
+    return res.status(400).json({ message: "Invalid role" });
+  }
+  if (!isNonEmptyString(email)) {
+    return res.status(400).json({ message: "E-Mail ist erforderlich." });
+  }
+  // Nur Mitarbeiter melden sich an und brauchen ein Passwort; Kunden bekommen keins.
+  const needsPassword = isPrivilegedRole(role);
+  if (needsPassword && !isValidNewPassword(password)) {
+    return res
+      .status(400)
+      .json({ message: "Das Passwort muss mindestens 8 Zeichen lang sein." });
+  }
 
   try {
     const emailHash = createHash(email);
@@ -46,11 +89,12 @@ exports.registerUser = async (req, res) => {
       where: { emailHash },
     });
     if (existingUser) {
-      return res.status(400).json({ message: "Email already registered" });
+      return res
+        .status(400)
+        .json({ message: "Diese E-Mail-Adresse ist bereits registriert." });
     }
 
-    // Passwort hashen
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const passwordHash = needsPassword ? await bcrypt.hash(password, 10) : null;
 
     // Benutzer erstellen
     const newUser = await User.create({
@@ -59,8 +103,8 @@ exports.registerUser = async (req, res) => {
       email,
       emailHash: emailHash,
       phone,
-      passwordHash: hashedPassword,
-      role: "CUSTOMER",
+      passwordHash,
+      role,
     });
 
     res
@@ -115,38 +159,24 @@ exports.requestOtp = async (req, res) => {
 
 exports.verifyOtp = async (req, res) => {
   const emailRaw = req.body.email;
-  const emailHash = createHash(emailRaw);
-  const code = req.body.code;
+  const code = typeof req.body.code === "string" ? req.body.code.trim() : req.body.code;
+  const invalidCodeResponse = {
+    message: "Der Code ist ungültig oder abgelaufen. Bitte fordere einen neuen Code an.",
+  };
+
+  // Nur Strings zulassen: ein Array als `code` wuerde zu `IN (...)` und erlaubt Brute-Force.
+  if (!isNonEmptyString(emailRaw) || !isSixDigitCode(code)) {
+    return res.status(400).json(invalidCodeResponse);
+  }
 
   try {
-    const verification = await VerificationCode.findOne({
-      where: { emailHash, code },
-      order: [["createdAt", "DESC"]],
-    });
-
-    if (!verification || verification.expiresAt < new Date()) {
-      return res.status(400).json({
-        message: "Der Code ist ungültig oder abgelaufen. Bitte fordere einen neuen Code an.",
-      });
+    const emailHash = createHash(emailRaw);
+    const verification = await findUsableCode(VerificationCode, emailHash, code);
+    if (!verification) {
+      return res.status(400).json(invalidCodeResponse);
     }
 
-    let user = await User.scope("withPassword").findOne({
-      where: { emailHash },
-    });
-
-    if (!user) {
-      // Create new user without password
-      // Important: Pass raw email, model will encrypt it. Pass hash explicitly.
-      user = await User.create({
-        email: emailRaw,
-        emailHash: emailHash,
-        role: "CUSTOMER",
-      });
-    }
-
-    // Clean up used OTP (optional, or rely on expiration/cron)
-    await verification.destroy();
-
+    // Warenkorb pruefen, bevor der Code verbraucht oder ein User angelegt wird.
     const accessToken = normalizeCartAccessToken(req.body.accessToken);
     if (!accessToken) {
       return res.status(400).json({
@@ -179,6 +209,23 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
+    let user = await User.scope("withPassword").findOne({
+      where: { emailHash },
+    });
+
+    if (!user) {
+      // Create new user without password
+      // Important: Pass raw email, model will encrypt it. Pass hash explicitly.
+      user = await User.create({
+        email: emailRaw,
+        emailHash: emailHash,
+        role: "CUSTOMER",
+      });
+    }
+
+    // Clean up used OTP (optional, or rely on expiration/cron)
+    await verification.destroy();
+
     await Cart.update({ userId: user.id }, { where: { accessToken } });
 
     try {
@@ -196,9 +243,8 @@ exports.verifyOtp = async (req, res) => {
       extra: { userId: user.id },
     });
 
-    const token = await createUserSession(user);
-
-    setAuthCookie(res, token);
+    // Keine Session/kein Token: Kunden melden sich nirgends an. Der Checkout
+    // erkennt den bestaetigten Kunden ueber den Warenkorb (cart.userId).
     res.json({
       user: {
         id: user.id,
@@ -208,7 +254,6 @@ exports.verifyOtp = async (req, res) => {
         phone: user.phone,
         role: user.role,
       },
-      token,
     });
   } catch (error) {
     console.error("Error verifying OTP:", error);
@@ -235,12 +280,17 @@ exports.loginUser = async (req, res) => {
     const user = await User.scope("withPassword").findOne({
       where: { emailHash },
     });
-    if (!user) {
+    // Nur CRM-Mitarbeiter koennen sich anmelden; Kunden bekommen dieselbe
+    // Meldung wie bei unbekannter E-Mail (keine Rueckschluesse moeglich).
+    if (!user || !isPrivilegedRole(user.role)) {
       logSecurityEvent({
         req,
         action: "login",
         outcome: "fail",
-        extra: { reason: "unknown_user" },
+        extra: {
+          reason: user ? "role_not_allowed" : "unknown_user",
+          ...(user ? { userId: user.id } : {}),
+        },
       });
       return res.status(400).json({ message: "Invalid email or password" });
     }
@@ -314,14 +364,19 @@ exports.loginUser = async (req, res) => {
 exports.requestPasswordReset = async (req, res) => {
   const { email } = req.body;
 
+  if (!isNonEmptyString(email)) {
+    return res.json({ message: "If the email exists, a reset code has been sent" });
+  }
+
   try {
     const emailHash = createHash(email);
     const user = await User.scope("withPassword").findOne({
       where: { emailHash },
     });
 
-    // Always return success to prevent email enumeration
-    if (!user) {
+    // Always return success to prevent email enumeration.
+    // Passwoerter gibt es nur fuer CRM-Mitarbeiter.
+    if (!user || !isPrivilegedRole(user.role)) {
       return res.json({ message: "If the email exists, a reset code has been sent" });
     }
 
@@ -344,17 +399,22 @@ exports.requestPasswordReset = async (req, res) => {
 };
 
 exports.resetPassword = async (req, res) => {
-  const { email, code, newPassword } = req.body;
+  const { email, newPassword } = req.body;
+  const code = typeof req.body.code === "string" ? req.body.code.trim() : req.body.code;
+
+  // Nur Strings zulassen: ein Array als `code` wuerde zu `IN (...)` und erlaubt Brute-Force.
+  if (!isNonEmptyString(email) || !isSixDigitCode(code)) {
+    return res.status(400).json({ message: "Invalid or expired reset code" });
+  }
+  if (!isValidNewPassword(newPassword)) {
+    return res.status(400).json({ message: "Password must be at least 8 characters" });
+  }
 
   try {
     const emailHash = createHash(email);
 
-    const resetCode = await PasswordResetCode.findOne({
-      where: { emailHash, code },
-      order: [["createdAt", "DESC"]],
-    });
-
-    if (!resetCode || resetCode.expiresAt < new Date()) {
+    const resetCode = await findUsableCode(PasswordResetCode, emailHash, code);
+    if (!resetCode) {
       return res.status(400).json({ message: "Invalid or expired reset code" });
     }
 
@@ -362,7 +422,7 @@ exports.resetPassword = async (req, res) => {
       where: { emailHash },
     });
 
-    if (!user) {
+    if (!user || !isPrivilegedRole(user.role)) {
       return res.status(400).json({ message: "Invalid or expired reset code" });
     }
 
@@ -455,7 +515,7 @@ exports.verifyMfaLogin = async (req, res) => {
     }
 
     const user = await User.scope("withPassword").findByPk(decoded.userId);
-    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+    if (!user || !isPrivilegedRole(user.role) || !user.mfaEnabled || !user.mfaSecret) {
       logSecurityEvent({
         req,
         action: "verify_mfa_login",
@@ -619,8 +679,8 @@ exports.cantamenAuth = async (req, res) => {
     });
 
     if (!user) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-
+      // Kein passwordHash: Kunden melden sich nicht an, das Cantamen-Passwort
+      // wird nur fuer die Anmeldung bei Cantamen verwendet und nicht gespeichert.
       user = await User.create({
         firstName: userData.prename,
         lastName: userData.name,
@@ -628,7 +688,6 @@ exports.cantamenAuth = async (req, res) => {
         phone,
         cantamenCustomerId: userData.customerNumber,
         emailHash: emailHash,
-        passwordHash: hashedPassword,
         role: "CUSTOMER",
       });
     } else {
@@ -667,10 +726,7 @@ exports.cantamenAuth = async (req, res) => {
       extra: { userId: user.id },
     });
 
-    const token = await createUserSession(user);
-
-    // 4. Response zurückgeben
-    setAuthCookie(res, token);
+    // 4. Response zurückgeben (ohne Session/Token, Kunden melden sich nirgends an)
     res.json({
       user: {
         id: user.id,
@@ -702,7 +758,6 @@ exports.cantamenAuth = async (req, res) => {
         accountHolderName: sepaAccount?.accountHolder || null,
         sepaMandateReference: sepaMandateReference || null,
       },
-      token,
     });
   } catch (e) {
     res.status(500).json({ error: "Internal server error" });

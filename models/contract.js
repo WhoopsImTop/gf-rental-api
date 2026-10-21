@@ -369,6 +369,8 @@ module.exports = (sequelize, DataTypes) => {
     {
       sequelize,
       modelName: "Contract",
+      // Loeschen im CRM setzt nur deletedAt; Vertraege bleiben als Nachweis erhalten.
+      paranoid: true,
     },
   );
   return Contract;

@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const controller = require("../controllers/deliveryPlaceController");
-const { authenticateToken } = require("../middleware/authMiddleware");
+const { requireStaff } = require("../middleware/requireStaff");
 
-router.get("/", authenticateToken, controller.getAllDeliveryPlaces);
-router.post("/", authenticateToken, controller.createDeliveryPlace);
-router.patch("/:id", authenticateToken, controller.updateDeliveryPlace);
-router.delete("/:id", authenticateToken, controller.deleteDeliveryPlace);
+router.get("/", ...requireStaff, controller.getAllDeliveryPlaces);
+router.post("/", ...requireStaff, controller.createDeliveryPlace);
+router.patch("/:id", ...requireStaff, controller.updateDeliveryPlace);
+router.delete("/:id", ...requireStaff, controller.deleteDeliveryPlace);
 
 module.exports = router;

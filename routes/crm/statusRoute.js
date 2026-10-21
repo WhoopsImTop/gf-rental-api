@@ -11,8 +11,8 @@ const {
 } = require("../../controllers/crm/statusController");
 
 router.post("/", authorizeRoles("ADMIN", "SELLER"), uploadFile("media"), createStatus);
-router.get("/", findAllStatuses);
-router.get("/:id", findOneStatus);
+router.get("/", authorizeRoles("ADMIN", "SELLER"), findAllStatuses);
+router.get("/:id", authorizeRoles("ADMIN", "SELLER"), findOneStatus);
 router.patch("/:id", authorizeRoles("ADMIN", "SELLER"), updateStatus);
 router.delete("/:id", authorizeRoles("ADMIN", "SELLER"), deleteStatus);
 

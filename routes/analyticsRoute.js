@@ -2,11 +2,12 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const analyticsController = require('../controllers/analyticsController');
-const { authenticateToken } = require('../middleware/authMiddleware');
+const { requireStaff } = require('../middleware/requireStaff');
 
+// Pro Seitenaufruf gehen ein Pageview- und ein Verweildauer-Event ein.
 const analyticsTrackLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  max: 120,
   message: "Too many analytics events from this IP, please try again later",
 });
 
@@ -22,8 +23,14 @@ const clientErrorLimiter = rateLimit({
   message: "Too many client error reports from this IP, please try again later",
 });
 
-// Public route for frontend tracking
-router.post('/track', analyticsTrackLimiter, analyticsController.trackVisit);
+// Public route for frontend tracking. sendBeacon sendet text/plain (CORS-safelisted,
+// kein Preflight); application/json wird weiterhin vom globalen Parser gelesen.
+router.post(
+  '/track',
+  analyticsTrackLimiter,
+  express.text({ type: 'text/plain', limit: '8kb' }),
+  analyticsController.trackVisit,
+);
 router.post(
   '/checkout-event',
   checkoutEventLimiter,
@@ -36,6 +43,6 @@ router.post(
 );
 
 // Protected route for CRM dashboard
-router.get('/stats', authenticateToken, analyticsController.getStats);
+router.get('/stats', ...requireStaff, analyticsController.getStats);
 
 module.exports = router;

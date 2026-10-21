@@ -15,11 +15,12 @@ const {
   contractSignedAdminNotification,
 } = require("../services/notification/order");
 const { getUserScore } = require("../services/auth/personalScore");
-const { logSecurityEvent } = require("../services/audit/securityAudit");
+const { logSecurityEvent, clientIp } = require("../services/audit/securityAudit");
 const { normalizeCartAccessToken, hashCartAccessTokenForLog } = require("../utils/cartAccessToken");
 const { escapeHtml } = require("../services/util/escapeHtml");
 const {
   buildContractListWhere,
+  canManageContract,
   createGenericServerErrorResponse,
 } = require("../services/security/accessPolicy");
 const { cancelForCart } = require("../services/followup/followupService");
@@ -165,8 +166,38 @@ const resolveActiveContractFileName = (contract) =>
   contract?.contractFile ||
   null;
 
-const canManageContract = (contract, user) =>
-  contract.userId === user.id || user.role === "ADMIN" || user.role === "SELLER";
+const shortHeader = (value, max = 200) =>
+  typeof value === "string" && value ? value.slice(0, max) : null;
+
+// Hilft zu unterscheiden, ob ein fehlender Warenkorb-Token von unserem Frontend
+// (Token verloren) oder von einem direkten API-Aufruf (Bot, curl, Postman) kommt.
+// Bewusst nur Struktur-Infos, keine personenbezogenen Inhalte aus dem Body.
+function describeCreateContractRequest(req) {
+  const body = req.body && typeof req.body === "object" ? req.body : null;
+  const rawToken = body?.accessToken;
+  let accessTokenShape = "missing";
+  if (rawToken !== undefined && rawToken !== null) {
+    accessTokenShape =
+      typeof rawToken === "string"
+        ? `string(len=${rawToken.trim().length})`
+        : typeof rawToken;
+  }
+
+  return {
+    origin: shortHeader(req.headers.origin),
+    referer: shortHeader(req.headers.referer),
+    contentType: shortHeader(req.headers["content-type"], 100),
+    bodyKeys: body
+      ? Object.keys(body)
+          .slice(0, 20)
+          .map((key) => key.slice(0, 40))
+      : null,
+    accessTokenShape,
+    hasCustomerDetails: !!body?.customerDetails && typeof body.customerDetails === "object",
+    hasContractData: !!body?.contractData && typeof body.contractData === "object",
+    hasPaymentData: !!body?.paymentData && typeof body.paymentData === "object",
+  };
+}
 
 function formatContractStartingDate(dateValue) {
   if (!dateValue) return "-";
@@ -869,15 +900,31 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
   } catch (error) {
     console.error("Error creating contract:", error);
 
+    const requestInfo =
+      error.message === "MISSING_ACCESS_TOKEN"
+        ? describeCreateContractRequest(req)
+        : null;
+
     logSecurityEvent({
       req,
       action: "create_contract",
       outcome: "fail",
       accessToken,
-      extra: { error: error.message },
+      extra: { error: error.message, ...(requestInfo && { request: requestInfo }) },
     });
 
-    logger("error", "Error creating contract" + error);
+    logger(
+      "error",
+      "Error creating contract" +
+        error +
+        (requestInfo
+          ? ` | request=${JSON.stringify({
+              ip: clientIp(req),
+              userAgent: shortHeader(req.headers["user-agent"]),
+              ...requestInfo,
+            })}`
+          : ""),
+    );
 
     if (error.message === "MISSING_ACCESS_TOKEN") {
       return res.status(400).json({
@@ -976,11 +1023,7 @@ exports.archiveContract = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Contract not found" });
     }
-    if (
-      contract.userId !== req.user.id &&
-      req.user.role !== "ADMIN" &&
-      req.user.role !== "SELLER"
-    ) {
+    if (!canManageContract(req.user)) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
@@ -1094,7 +1137,7 @@ exports.updateContractPartyData = async (req, res) => {
       });
     }
 
-    if (!canManageContract(contract, req.user)) {
+    if (!canManageContract(req.user)) {
       return res.status(403).json({
         success: false,
         message: "Access denied",
@@ -1311,12 +1354,20 @@ exports.generateContract = async (req, res) => {
 
 exports.uploadContractFile = async (req, res) => {
   const id = req.params.id;
+  // multer hat die Datei bereits geschrieben: bei jedem Abbruch wieder entfernen.
+  let uploadAttached = false;
+  const discardUpload = () =>
+    req.file?.path && !uploadAttached
+      ? fs.promises.unlink(req.file.path).catch(() => {})
+      : Promise.resolve();
   try {
     const contract = await db.Contract.findByPk(id);
     if (!contract) {
+      await discardUpload();
       return res.status(404).json({ success: false, message: "Contract not found" });
     }
-    if (!canManageContract(contract, req.user)) {
+    if (!canManageContract(req.user)) {
+      await discardUpload();
       return res.status(403).json({ success: false, message: "Access denied" });
     }
     if (!req.file?.filename) {
@@ -1354,7 +1405,6 @@ exports.uploadContractFile = async (req, res) => {
     const newFileName = req.file.filename;
     const oldGeneratedFile = contract.contractFile;
     const oldUploadedFile = contract.uploadedContractFile;
-    const oldSignedFile = contract.signedContractFile;
 
     await contract.update({
       contractFile: newFileName,
@@ -1371,6 +1421,7 @@ exports.uploadContractFile = async (req, res) => {
       signatureUserAgent: null,
       signatureFullName: null,
     });
+    uploadAttached = true;
 
     if (oldGeneratedFile && oldGeneratedFile !== newFileName) {
       deleteContractFileIfExists(oldGeneratedFile);
@@ -1382,14 +1433,7 @@ exports.uploadContractFile = async (req, res) => {
     ) {
       deleteContractFileIfExists(oldUploadedFile);
     }
-    if (
-      oldSignedFile &&
-      oldSignedFile !== newFileName &&
-      oldSignedFile !== oldGeneratedFile &&
-      oldSignedFile !== oldUploadedFile
-    ) {
-      deleteContractFileIfExists(oldSignedFile);
-    }
+    // Bereits unterschriebene PDFs werden bewusst NICHT geloescht (Nachweis).
 
     return res.status(201).json({
       success: true,
@@ -1404,6 +1448,7 @@ exports.uploadContractFile = async (req, res) => {
       },
     });
   } catch (error) {
+    await discardUpload();
     return res.status(500).json({
       success: false,
       message: "Interner Serverfehler",
@@ -1414,8 +1459,6 @@ exports.uploadContractFile = async (req, res) => {
 exports.viewContractFile = async (req, res) => {
   try {
     const { filename } = req.params;
-    const userId = req.user.id; // Aus dem JWT Token
-    const userRole = req.user.role;
     // 1. DB-Check: Gehört die Datei dem User? (Schutz gegen IDOR)
     const contract = await db.Contract.findOne({
       where: {
@@ -1431,12 +1474,8 @@ exports.viewContractFile = async (req, res) => {
       return res.status(404).json({ error: "Vertrag nicht gefunden." });
     }
 
-    // Sicherheits-Check: Nur der Eigentümer oder ein Admin/Seller darf die Datei sehen
-    if (
-      contract.userId !== userId &&
-      userRole !== "ADMIN" &&
-      userRole !== "SELLER"
-    ) {
+    // Sicherheits-Check: Nur Admin/Seller duerfen Vertragsdateien sehen
+    if (!canManageContract(req.user)) {
       return res.status(403).json({ error: "Zugriff verweigert." });
     }
 
@@ -1452,8 +1491,6 @@ exports.viewContractFile = async (req, res) => {
 exports.viewSignatureFile = async (req, res) => {
   try {
     const { filename } = req.params;
-    const userId = req.user.id;
-    const userRole = req.user.role;
 
     const contract = await db.Contract.findOne({
       where: { signatureImagePath: filename },
@@ -1463,11 +1500,7 @@ exports.viewSignatureFile = async (req, res) => {
       return res.status(404).json({ error: "Signatur nicht gefunden." });
     }
 
-    if (
-      contract.userId !== userId &&
-      userRole !== "ADMIN" &&
-      userRole !== "SELLER"
-    ) {
+    if (!canManageContract(req.user)) {
       return res.status(403).json({ error: "Zugriff verweigert." });
     }
 
@@ -1513,7 +1546,7 @@ exports.issueContractShareLink = async (req, res) => {
     if (!contract) {
       return res.status(404).json({ success: false, message: "Contract not found" });
     }
-    if (!canManageContract(contract, req.user)) {
+    if (!canManageContract(req.user)) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
@@ -1557,7 +1590,7 @@ exports.revokeContractShareLink = async (req, res) => {
     if (!contract) {
       return res.status(404).json({ success: false, message: "Contract not found" });
     }
-    if (!canManageContract(contract, req.user)) {
+    if (!canManageContract(req.user)) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
     await contract.update({
@@ -1595,11 +1628,7 @@ exports.issueContractSignLink = async (req, res) => {
     if (!contract) {
       return res.status(404).json({ success: false, message: "Contract not found" });
     }
-    if (
-      contract.userId !== req.user.id &&
-      req.user.role !== "ADMIN" &&
-      req.user.role !== "SELLER"
-    ) {
+    if (!canManageContract(req.user)) {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
@@ -1856,11 +1885,7 @@ exports.deleteContract = async (req, res) => {
     if (!contract) {
       return res.status(404).json({ message: "Contract not found" });
     }
-    if (
-      contract.userId !== req.user.id &&
-      req.user.role !== "ADMIN" &&
-      req.user.role !== "SELLER"
-    ) {
+    if (!canManageContract(req.user)) {
       return res.status(403).json({ message: "Access denied" });
     }
 

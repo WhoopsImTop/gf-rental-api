@@ -5,7 +5,7 @@ const { authenticateToken } = require("../middleware/authMiddleware");
 const { requireRole } = require("../middleware/requireRole");
 
 router.get("/insurance", settingController.findInsurance);
-router.get("/", authenticateToken, settingController.findSetting);
+router.get("/", authenticateToken, requireRole("ADMIN", "SELLER"), settingController.findSetting);
 router.patch(
   "/",
   authenticateToken,

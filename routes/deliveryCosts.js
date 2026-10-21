@@ -4,7 +4,7 @@ const controller = require("../controllers/deliveryCostController");
 const { authenticateToken } = require("../middleware/authMiddleware");
 const { requireRole } = require("../middleware/requireRole");
 
-router.get("/", authenticateToken, controller.getAllPlz);
+router.get("/", authenticateToken, requireRole("ADMIN", "SELLER"), controller.getAllPlz);
 router.get("/:plz", controller.getDeliveryCostByPlz);
 router.patch(
   "/recalculate",

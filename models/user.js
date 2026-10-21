@@ -112,7 +112,9 @@ module.exports = (sequelize, DataTypes) => {
       modelName: "User",
       defaultScope: {
         attributes: {
-          exclude: ["passwordHash", "createdAt", "updatedAt", "role"],
+          // mfaSecret nie standardmaessig ausliefern (Getter entschluesselt ihn).
+          // MFA-Logik liest ihn ueber scope("withPassword").
+          exclude: ["passwordHash", "mfaSecret", "createdAt", "updatedAt", "role"],
         },
       },
       scopes: {

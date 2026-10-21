@@ -4,9 +4,11 @@ const rateLimit = require("express-rate-limit");
 const slowDown = require("express-slow-down");
 const multer = require("multer");
 const path = require("path");
+const crypto = require("crypto");
 const contractController = require("../controllers/contractController");
-const { authenticateToken } = require("../middleware/authMiddleware");
-const { requireRole } = require("../middleware/requireRole");
+// Alle angemeldeten Vertragsrouten sind nur fuer CRM-Mitarbeiter (ADMIN/SELLER).
+// Oeffentlich bleiben: Vertragsabschluss (POST /), Signatur- und Freigabe-Links per Token.
+const { requireStaff } = require("../middleware/requireStaff");
 
 const publicSignLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -33,9 +35,11 @@ const contractUploadStorage = multer.diskStorage({
     cb(null, path.join(__dirname, "../internal-files/contracts"));
   },
   filename: (req, file, cb) => {
-    const extension = path.extname(file.originalname || ".pdf");
-    const contractId = req.params.id || "contract";
-    cb(null, `vertrag_upload_${contractId}_${Date.now()}${extension}`);
+    // Keine Nutzereingaben ungeprueft in den Pfad: id nur als Ziffernfolge,
+    // Endung fest ".pdf" (fileFilter laesst ohnehin nur PDFs zu).
+    const rawId = String(req.params.id || "");
+    const contractId = /^\d+$/.test(rawId) ? rawId : "contract";
+    cb(null, `vertrag_upload_${contractId}_${crypto.randomUUID()}.pdf`);
   },
 });
 
@@ -52,14 +56,22 @@ const contractUpload = multer({
   },
 });
 
+// Vertrags-IDs sind Ganzzahlen. Wird vor allen Handlern (auch multer) ausgefuehrt.
+router.param("id", (req, res, next, id) => {
+  if (!/^\d+$/.test(String(id))) {
+    return res.status(400).json({ success: false, message: "Ungueltige Vertrags-ID" });
+  }
+  return next();
+});
+
 router.get(
   "/view/:filename",
-  authenticateToken,
+  ...requireStaff,
   contractController.viewContractFile
 );
 router.get(
   "/signature/:filename",
-  authenticateToken,
+  ...requireStaff,
   contractController.viewSignatureFile
 );
 router.get(
@@ -68,17 +80,17 @@ router.get(
 );
 router.post(
   "/:id/sign-link",
-  authenticateToken,
+  ...requireStaff,
   contractController.issueContractSignLink
 );
 router.post(
   "/:id/share-link",
-  authenticateToken,
+  ...requireStaff,
   contractController.issueContractShareLink
 );
 router.post(
   "/:id/share-link/revoke",
-  authenticateToken,
+  ...requireStaff,
   contractController.revokeContractShareLink
 );
 router.get(
@@ -96,31 +108,30 @@ router.post(
   publicSignLimiter,
   contractController.submitContractSignature
 );
-router.get("/", authenticateToken, contractController.getAllContracts);
+router.get("/", ...requireStaff, contractController.getAllContracts);
 router.post(
   "/",
   publicCreateContractLimiter,
   publicCreateContractSlowDown,
   contractController.createContract,
 );
-router.post("/generate-pdf/:id", authenticateToken, contractController.generateContract);
+router.post("/generate-pdf/:id", ...requireStaff, contractController.generateContract);
 router.post(
   "/:id/upload-contract",
-  authenticateToken,
+  ...requireStaff,
   contractUpload.single("contractFile"),
   contractController.uploadContractFile
 );
 router.patch(
   "/:id/party-data",
-  authenticateToken,
-  requireRole("ADMIN", "SELLER"),
+  ...requireStaff,
   contractController.updateContractPartyData,
 );
 router.patch(
   "/archive/:id",
-  authenticateToken,
+  ...requireStaff,
   contractController.archiveContract
 );
-router.delete("/:id", authenticateToken, contractController.deleteContract);
+router.delete("/:id", ...requireStaff, contractController.deleteContract);
 
 module.exports = router;
