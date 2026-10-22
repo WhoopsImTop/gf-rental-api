@@ -23,11 +23,13 @@ const clientErrorLimiter = rateLimit({
   message: "Too many client error reports from this IP, please try again later",
 });
 
-// Public route for frontend tracking. sendBeacon sendet text/plain (CORS-safelisted,
-// kein Preflight); application/json wird weiterhin vom globalen Parser gelesen.
+// Public route for frontend tracking. Das Frontend sendet form-urlencoded
+// (CORS-safelisted, von der Comodo-WAF erlaubt). text/plain-JSON bleibt für
+// bereits ausgelieferte Clients lesbar; application/json liest der globale Parser.
 router.post(
   '/track',
   analyticsTrackLimiter,
+  express.urlencoded({ extended: false, limit: '8kb' }),
   express.text({ type: 'text/plain', limit: '8kb' }),
   analyticsController.trackVisit,
 );
