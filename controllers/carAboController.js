@@ -1,5 +1,13 @@
 const db = require("../models");
 const { logger } = require("../services/logging");
+const {
+  getColorSurcharge,
+  isWholeEuroSurcharge,
+  SURCHARGE_WHOLE_EURO_MESSAGE,
+  getMonthlyBasePrice,
+  resolveCarAboColor,
+  COLOR_ERROR_MESSAGES,
+} = require("../utils/carAboPricing");
 const DEPOSIT_STEP = 50;
 const MAX_DEPOSIT_CAP = 5000;
 const DEPOSIT_FEE_FACTOR = 1.025;
@@ -203,6 +211,23 @@ const normalizeCarAboPayload = (payload = {}) => {
   return normalized;
 };
 
+const normalizeColorPayload = (color = {}) => {
+  if (!Object.prototype.hasOwnProperty.call(color, "priceSurcharge")) {
+    return color;
+  }
+  return { ...color, priceSurcharge: getColorSurcharge(color) };
+};
+
+const findDecimalSurchargeColors = (colors) => {
+  if (!Array.isArray(colors)) return [];
+  return colors.filter(
+    (color) =>
+      color &&
+      Object.prototype.hasOwnProperty.call(color, "priceSurcharge") &&
+      !isWholeEuroSurcharge(color.priceSurcharge),
+  );
+};
+
 const replaceChildren = async (Model, items, carAboId, transaction) => {
   if (!Array.isArray(items)) {
     return;
@@ -256,7 +281,7 @@ const updateColorsWithExteriorImages = async (items, carAboId, transaction) => {
   const existingMap = new Map(existing.map((item) => [item.id, item]));
 
   for (const item of items) {
-    const { exteriorImages, ...colorData } = item;
+    const { exteriorImages, ...colorData } = normalizeColorPayload(item);
     let colorRecord;
 
     if (colorData.id && existingMap.has(colorData.id)) {
@@ -296,6 +321,10 @@ const updateColorsWithExteriorImages = async (items, carAboId, transaction) => {
 
 exports.createCarAbo = async (req, res) => {
   const { prices, colors, media, ...rawCarAboPayload } = req.body;
+
+  if (findDecimalSurchargeColors(colors).length) {
+    return res.status(400).json({ error: SURCHARGE_WHOLE_EURO_MESSAGE });
+  }
   const carAboPayload = normalizeCarAboPayload(rawCarAboPayload);
 
   // Calculate availableFrom if availableInDays is provided
@@ -327,7 +356,8 @@ exports.createCarAbo = async (req, res) => {
         if (Array.isArray(colors) && colors.length) {
           const colorRecords = [];
           for (const color of colors) {
-            const { exteriorImages, ...colorData } = color;
+            const { exteriorImages, ...colorData } =
+              normalizeColorPayload(color);
             const created = await db.CarAboColor.create(
               { ...colorData, carAboId: carAbo.id },
               { transaction },
@@ -514,6 +544,10 @@ exports.findOneCarAbo = async (req, res) => {
 exports.updateCarAbo = async (req, res) => {
   const { id } = req.params;
   const { prices, colors, media, ...rawCarAboPayload } = req.body;
+
+  if (findDecimalSurchargeColors(colors).length) {
+    return res.status(400).json({ error: SURCHARGE_WHOLE_EURO_MESSAGE });
+  }
   const carAboPayload = normalizeCarAboPayload(rawCarAboPayload);
 
   // Calculate availableFrom if availableInDays is provided
@@ -588,7 +622,8 @@ exports.deleteCarAbo = async (req, res) => {
 exports.calculatePrice = async (req, res) => {
   try {
     const { id } = req.params;
-    const { depositValue, durationMonths, mileageKm, durationType } = req.body;
+    const { depositValue, durationMonths, mileageKm, durationType, colorId } =
+      req.body;
     const durationMonthsInt = parseInt(durationMonths, 10);
     const mileageKmInt = parseInt(mileageKm, 10);
     if (!Number.isInteger(durationMonthsInt) || durationMonthsInt <= 0) {
@@ -617,10 +652,24 @@ exports.calculatePrice = async (req, res) => {
       return res.status(404).json({ error: "Price configuration not found" });
     }
 
-    // Determine base price based on durationType
-    const basePrice = validDurationType === 'minimum'
-      ? parseFloat(selectedPrice.priceMinimumDuration)
-      : parseFloat(selectedPrice.priceFixedDuration);
+    let selectedColor = null;
+    try {
+      selectedColor = await resolveCarAboColor(db, carAbo.id, colorId);
+    } catch (colorError) {
+      if (COLOR_ERROR_MESSAGES[colorError.message]) {
+        return res
+          .status(400)
+          .json({ error: COLOR_ERROR_MESSAGES[colorError.message] });
+      }
+      throw colorError;
+    }
+
+    // Matrixpreis je Laufzeitmodell plus Aufpreis der gewählten Farbe
+    const basePrice = getMonthlyBasePrice(
+      selectedPrice,
+      validDurationType,
+      selectedColor,
+    );
     if (!Number.isFinite(basePrice) || basePrice <= 0) {
       return res.status(400).json({ error: "Ungültige Preisgrundlage." });
     }
@@ -661,9 +710,12 @@ exports.calculatePrice = async (req, res) => {
       savings: Math.round(savings).toFixed(2),
       depositValue: depositAmount.toFixed(2),
       durationType: validDurationType,
+      colorSurcharge: getColorSurcharge(selectedColor).toFixed(2),
     });
   } catch (error) {
     logger("error", `[calculatePrice] ${error.message}`);
     return res.status(500).json({ error: "Es ist ein Fehler aufgetreten" });
   }
 };
+
+exports._internals = { normalizeColorPayload, findDecimalSurchargeColors };

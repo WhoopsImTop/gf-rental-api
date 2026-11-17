@@ -1,6 +1,7 @@
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 const fs = require("fs");
 const path = require("path");
+const { getContractMonthlyBasePrice } = require("../../utils/carAboPricing");
 
 async function generateContractPdf(contractInstance, options = {}) {
   try {
@@ -53,10 +54,8 @@ async function generateContractPdf(contractInstance, options = {}) {
     const getMwStAnteil = (brutto) =>
       brutto ? parseFloat(brutto) - parseFloat(brutto) / 1.19 : 0;
 
-    const basePrice =
-      contractInstance.durationType === "minimum"
-        ? parseFloat(contractInstance.price?.priceMinimumDuration || 0)
-        : parseFloat(contractInstance.price?.priceFixedDuration || 0);
+    // Matrixpreis plus beim Abschluss gespeicherter Farbaufpreis
+    const basePrice = getContractMonthlyBasePrice(contractInstance);
     const bruttoMiete = Number.isFinite(basePrice) ? basePrice : 0;
     const bruttoMieteEffektiv = parseFloat(
       contractInstance.calculatedMonthlyPrice || 0,

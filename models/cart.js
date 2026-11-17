@@ -72,6 +72,12 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
+      // Farbaufpreis zum Zeitpunkt von syncCart, Grundlage für den Vertragspreis.
+      // null bei Warenkörben von vor dem Farbaufpreis (zählt als 0).
+      colorSurcharge: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
       lastCheckoutStep: {
         type: DataTypes.STRING(64),
         allowNull: true,

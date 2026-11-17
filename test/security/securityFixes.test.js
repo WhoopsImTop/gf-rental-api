@@ -64,6 +64,7 @@ function buildApp() {
   app.use("/api/contracts", require("../../routes/contractRoute"));
   app.use("/api/mail", require("../../routes/emailRoute"));
   app.use("/api/auth", require("../../routes/auth/AuthentificationRoute"));
+  app.use("/api/car-abo-folders", require("../../routes/carAboFolderRoute"));
   return app;
 }
 
@@ -190,6 +191,12 @@ test("staff-only routes reject CUSTOMER (403) and anonymous (401)", async () => 
     ["PATCH", "/api/contracts/archive/1"],
     ["DELETE", "/api/contracts/1"],
     ["POST", "/api/mail/confirmation/resend/1"],
+    // Fahrzeug-Ordner sind reine CRM-Organisation
+    ["GET", "/api/car-abo-folders"],
+    ["POST", "/api/car-abo-folders"],
+    ["PUT", "/api/car-abo-folders/assignments"],
+    ["PATCH", "/api/car-abo-folders/1"],
+    ["DELETE", "/api/car-abo-folders/1"],
   ];
 
   await withServer(async (base) => {
@@ -235,6 +242,18 @@ test("checkout and signing routes stay public", async () => {
       });
       assert.notEqual(res.status, 401, `${method} ${url}`);
       assert.notEqual(res.status, 403, `${method} ${url}`);
+    }
+  });
+});
+
+test("car-abo-folder routes only match numeric folder ids", async () => {
+  await withServer(async (base) => {
+    for (const method of ["PATCH", "DELETE"]) {
+      const res = await fetch(`${base}/api/car-abo-folders/abc`, {
+        method,
+        headers: { "x-test-role": "ADMIN" },
+      });
+      assert.equal(res.status, 404, method);
     }
   });
 });
