@@ -327,6 +327,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
       },
+      colorSurcharge: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+      },
       lat: {
         type: DataTypes.TEXT,
         set(value) {

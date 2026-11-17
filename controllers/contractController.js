@@ -17,6 +17,13 @@ const {
 const { getUserScore } = require("../services/auth/personalScore");
 const { logSecurityEvent, clientIp } = require("../services/audit/securityAudit");
 const { normalizeCartAccessToken, hashCartAccessTokenForLog } = require("../utils/cartAccessToken");
+const {
+  computeContractPricing,
+  isCartPriceCurrent,
+  getMatrixPrice,
+  PRICE_CHANGED_MESSAGE,
+  COLOR_ERROR_MESSAGES,
+} = require("../utils/carAboPricing");
 const { escapeHtml } = require("../services/util/escapeHtml");
 const {
   buildContractListWhere,
@@ -517,47 +524,33 @@ exports.createContract = async (req, res) => {
 
       const syncedByCantamen = Cart.syncedByCantamen || false;
 
-      let selectedPrice = null;
+      // Wirft PRICE_CONFIGURATION_INVALID bzw. COLOR_NOT_FOUND (fremde colorId).
+      const {
+        selectedPrice,
+        colorSurcharge,
+        duration,
+        basePrice,
+        monthlyDepositDiscount,
+        calculatedMonthlyPrice,
+        monthlyPrice,
+        totalCost,
+      } = computeContractPricing({
+        prices: Cart.car?.prices,
+        priceId: Cart.priceId,
+        colors: Cart.car?.colors,
+        colorId: Cart.colorId,
+        cartColorSurcharge: Cart.colorSurcharge,
+        durationType: Cart.durationType,
+        depositValue: Cart.depositValue,
+        insurancePackage: contractData.insurancePackage,
+        insuranceCosts: contractData.insuranceCosts,
+      });
 
-      if (Cart.priceId && Cart.car && Cart.car.prices) {
-        selectedPrice = Cart.car.prices.find(
-          (price) => price.id === Cart.priceId,
-        );
+      // Kein Vertrag zu einem anderen Preis als dem, den der Kunde gesehen hat
+      // (z. B. Matrixpreis im CRM geändert, während der Checkout offen war).
+      if (!isCartPriceCurrent(Cart.calculatedMonthlyPrice, calculatedMonthlyPrice)) {
+        throw new Error("PRICE_CHANGED");
       }
-
-      if (!selectedPrice) {
-        throw new Error("PRICE_CONFIGURATION_INVALID");
-      }
-
-      const duration = selectedPrice.durationMonths;
-      const validDurationType =
-        Cart.durationType === "minimum" ? "minimum" : "fixed";
-      const basePrice =
-        validDurationType === "minimum"
-          ? parseFloat(selectedPrice.priceMinimumDuration)
-          : parseFloat(selectedPrice.priceFixedDuration);
-      if (
-        !Number.isFinite(basePrice) ||
-        !Number.isFinite(Number(duration)) ||
-        Number(duration) <= 0
-      ) {
-        throw new Error("PRICE_CONFIGURATION_INVALID");
-      }
-      const depVal = parseFloat(Cart.depositValue) || 0;
-      const monthlyDepositDiscount =
-        depVal > 0
-          ? Math.round((depVal * 1.025) / parseInt(duration, 10))
-          : 0;
-      let monthlyPrice = basePrice;
-      if (depVal > 0) {
-        monthlyPrice = basePrice - (depVal * 1.025) / parseInt(duration, 10);
-      }
-      if (contractData.insurancePackage) {
-        const ins = parseFloat(contractData.insuranceCosts);
-        monthlyPrice += Number.isFinite(ins) ? ins : 0;
-      }
-      monthlyPrice = Math.round(monthlyPrice);
-      const totalCost = duration * monthlyPrice;
 
       const monthlyPriceFinal = normalizeMoney(monthlyPrice);
       const totalCostFinal = normalizeMoney(totalCost);
@@ -627,6 +620,7 @@ exports.createContract = async (req, res) => {
               selectedPrice.priceFixedDuration ?? null,
             priceMinimumDuration:
               selectedPrice.priceMinimumDuration ?? null,
+            colorSurcharge: normalizeMoney(colorSurcharge),
           },
           rounded: {
             monthlyPriceBeforeRounding: basePrice,
@@ -679,8 +673,9 @@ exports.createContract = async (req, res) => {
           priceId: Cart.priceId,
           durationType: Cart.durationType || "fixed",
           depositValue: Cart.depositValue,
-          calculatedMonthlyPrice: Cart.calculatedMonthlyPrice,
+          calculatedMonthlyPrice,
           monthlyDepositDiscount,
+          colorSurcharge,
           syncedByCantamen: syncedByCantamen,
           customerType: isBusiness ? "business" : "private",
           score: userScore.score || "Kein Score vorhanden",
@@ -822,7 +817,7 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
       </table>
 
       ${contract.durationType === "minimum" ? `<p>Ohne fristgerechte Kündigung (1 Monat vor Vertragsende) verlängert sich die Nutzung.</p>` : ""}
-      ${contract.durationType === "minimum" && contract.depositValue > 0 ? `<p>Der Monatsbeitrag des Fahrzeuges steigt dann auf <strong>${parseFloat(selectedPrice.priceMinimumDuration).toFixed(2)} €</strong> (ohne Anzahlungsvorteil).</p>` : ""}
+      ${contract.durationType === "minimum" && contract.depositValue > 0 ? `<p>Der Monatsbeitrag des Fahrzeuges steigt dann auf <strong>${(getMatrixPrice(selectedPrice, "minimum") + colorSurcharge).toFixed(2)} €</strong> (ohne Anzahlungsvorteil).</p>` : ""}
 
       <hr style="margin: 10px; border: 1px solid #efefef;"/>
       <h2 style="font-weight: 900; margin: 0; padding: 0;">Nächste Schritte</h2>
@@ -1006,6 +1001,14 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
       return res.status(400).json({
         message:
           "Die gewählte Preiskonfiguration ist nicht mehr gültig. Bitte Fahrzeug erneut konfigurieren.",
+      });
+    }
+    if (error.message === "PRICE_CHANGED") {
+      return res.status(409).json({ message: PRICE_CHANGED_MESSAGE });
+    }
+    if (COLOR_ERROR_MESSAGES[error.message]) {
+      return res.status(400).json({
+        message: COLOR_ERROR_MESSAGES[error.message],
       });
     }
 

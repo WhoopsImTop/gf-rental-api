@@ -2,6 +2,16 @@ const db = require("../../models");
 const { logger } = require("../logging");
 const { generateEmailHtml, sendNotificationEmail } = require("../mailService");
 const { escapeHtml } = require("../util/escapeHtml");
+const { getColorSurcharge } = require("../../utils/carAboPricing");
+
+// Farbname für die Admin-Mail, mit dem beim Abschluss berechneten Aufpreis.
+function formatColorLabel(color, colorSurcharge) {
+  const name = escapeHtml(color?.colorName || "-");
+  const surcharge = getColorSurcharge({ priceSurcharge: colorSurcharge });
+  if (!surcharge) return name;
+  return `${name} (+${surcharge.toFixed(2)} € Farbaufpreis/Monat)`;
+}
+exports.formatColorLabel = formatColorLabel;
 
 function formatContractStartingDate(dateValue) {
   if (!dateValue) return "-";
@@ -100,6 +110,7 @@ ${previewImageUrl ? `<img src="${escapeHtml(previewImageUrl)}" width="100%" heig
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Wunschstarttermin</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${formatContractStartingDate(contract.startingDate)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Vertragslaufzeit</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.duration} ${contract.duration > 1 ? "Monate" : "Monat"}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Kilometerleistung</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${ price?.mileageKm || ""} km</td></tr>
+          <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Farbe</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${formatColorLabel(autoAbo?.colors?.[0], contract.colorSurcharge)}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Anzahlung</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${parseFloat(contract.depositValue).toFixed(2)} €</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Laufzeit Typ</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.durationType}</td></tr>
           <tr><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">Sicherheitspaket</td><td style="padding: 8px 16px; margin: 0; border-bottom: 1px solid #efefef">${contract.insuranceType}</td></tr>

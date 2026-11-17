@@ -52,6 +52,12 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      // Monatlicher Aufpreis dieser Farbe auf jede Zelle der Preis-Matrix.
+      priceSurcharge: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+        defaultValue: 0,
+      },
 
       // Virtual field to calculate `availableFrom`
       // Im CarAboColor Model

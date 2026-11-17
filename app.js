@@ -7,6 +7,7 @@ const { sequelize } = require("./models");
 
 //import routes
 const carAboRoute = require("./routes/carAboRoute");
+const carAboFolderRoute = require("./routes/carAboFolderRoute");
 const brandRoute = require("./routes/brandRoute");
 const sellerRoute = require("./routes/sellerRoute");
 const carsharingCarRoute = require("./routes/carsharingCarRoute");
@@ -141,6 +142,7 @@ app.use(
 );
 app.use("/api/users", authenticateToken, userRoute);
 app.use("/api/car-abos", carAboRoute);
+app.use("/api/car-abo-folders", carAboFolderRoute);
 app.use("/api/brands", brandRoute);
 app.use("/api/sellers", sellerRoute);
 app.use("/api/carsharing-cars", carsharingCarRoute);

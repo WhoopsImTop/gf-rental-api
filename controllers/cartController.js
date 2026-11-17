@@ -2,6 +2,14 @@ const db = require("../models");
 const { logger } = require("../services/logging");
 const { logSecurityEvent } = require("../services/audit/securityAudit");
 const { normalizeCartAccessToken } = require("../utils/cartAccessToken");
+const {
+  getColorSurcharge,
+  getMonthlyBasePrice,
+  getDepositAdjustedPrice,
+  roundMonthlyRate,
+  resolveCarAboColor,
+  COLOR_ERROR_MESSAGES,
+} = require("../utils/carAboPricing");
 const DEPOSIT_STEP = 50;
 const MAX_DEPOSIT_CAP = 5000;
 const DEPOSIT_FEE_FACTOR = 1.025;
@@ -105,10 +113,26 @@ exports.syncCart = async (req, res) => {
       });
     }
 
-    const basePrice =
-      validDurationType === "minimum"
-        ? parseFloat(selectedPrice.priceMinimumDuration)
-        : parseFloat(selectedPrice.priceFixedDuration);
+    let selectedColor = null;
+    try {
+      selectedColor = await resolveCarAboColor(db, carAbo.id, colorId, {
+        required: true,
+      });
+    } catch (colorError) {
+      if (COLOR_ERROR_MESSAGES[colorError.message]) {
+        return res
+          .status(400)
+          .json({ message: COLOR_ERROR_MESSAGES[colorError.message] });
+      }
+      throw colorError;
+    }
+    colorId = selectedColor ? selectedColor.id : null;
+
+    const basePrice = getMonthlyBasePrice(
+      selectedPrice,
+      validDurationType,
+      selectedColor,
+    );
     const durationMonthsInt = parseInt(selectedPrice.durationMonths, 10);
     if (
       !Number.isFinite(basePrice) ||
@@ -136,11 +160,11 @@ exports.syncCart = async (req, res) => {
     );
     depositValue = depositAmount;
 
-    let calculatedPrice = basePrice;
-    if (depositAmount > 0) {
-      calculatedPrice =
-        basePrice - (depositAmount * 1.025) / durationMonthsInt;
-    }
+    let calculatedPrice = getDepositAdjustedPrice(
+      basePrice,
+      depositAmount,
+      durationMonthsInt,
+    );
 
     if (calculatedPrice <= 0) {
       return res.status(400).json({
@@ -151,7 +175,10 @@ exports.syncCart = async (req, res) => {
       });
     }
 
-    calculatedPrice = Math.round(parseFloat(calculatedPrice.toFixed(2)));
+    // Gleiche Rundung wie createContract, damit Warenkorb und Vertrag übereinstimmen.
+    calculatedPrice = roundMonthlyRate(calculatedPrice);
+    // Aufpreis, den der Kunde jetzt sieht; der Vertrag rechnet später mit diesem Wert.
+    const colorSurcharge = getColorSurcharge(selectedColor);
 
     if (calculatedMonthlyPrice !== calculatedPrice) {
       calculatedMonthlyPrice = calculatedPrice;
@@ -164,6 +191,7 @@ exports.syncCart = async (req, res) => {
       cart.durationType = validDurationType;
       cart.depositValue = depositValue;
       cart.calculatedMonthlyPrice = calculatedMonthlyPrice;
+      cart.colorSurcharge = colorSurcharge;
       await cart.save();
       logSecurityEvent({
         req,
@@ -179,6 +207,7 @@ exports.syncCart = async (req, res) => {
         durationType: validDurationType,
         depositValue,
         calculatedMonthlyPrice,
+        colorSurcharge,
       });
       logSecurityEvent({
         req,
