@@ -1,0 +1,162 @@
+{
+  "locationsPage1": {
+    "items": [
+      {
+        "id": "123",
+        "source": "datex2_enbw",
+        "original_id": "ENBW-FR-1",
+        "operator": { "name": "ENBW" },
+        "address": "Bertoldstraße 1",
+        "city": "Freiburg",
+        "last_updated": "2026-11-18T07:20:00Z",
+        "coordinates": { "lat": 47.995901, "lon": 7.852201 },
+        "evses": [
+          {
+            "uid": "262347501",
+            "status": "AVAILABLE",
+            "status_last_updated": "2026-11-18T07:26:56Z",
+            "last_updated": "2026-11-18T07:26:56Z",
+            "connectors": [
+              {
+                "standard": "IEC_62196_T2_COMBO",
+                "power_type": "DC",
+                "max_electric_power": 150000
+              },
+              {
+                "standard": "IEC_62196_T2",
+                "power_type": "AC_3_PHASE",
+                "max_electric_power": 22000
+              }
+            ]
+          },
+          {
+            "uid": "262347502",
+            "status": "CHARGING",
+            "status_last_updated": "2026-11-18T07:10:00Z",
+            "connectors": [
+              {
+                "standard": "CHADEMO",
+                "power_type": "DC",
+                "max_electric_power": 50000
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "72555",
+        "source": "bnetza_api",
+        "original_id": "1002913",
+        "operator": { "name": "Stadtwerke Lünen Infrastrukturbau GmbH" },
+        "address": "Viktoriastr. 5",
+        "city": "Lünen",
+        "last_updated": "2026-11-10T18:06:33Z",
+        "coordinates": { "latitude": 51.608953, "longitude": 7.522998 },
+        "evses": [
+          {
+            "uid": "259994189",
+            "status": "STATIC",
+            "last_updated": "2026-11-10T18:06:33Z",
+            "connectors": [
+              {
+                "standard": "IEC_62196_T2",
+                "power_type": "AC_3_PHASE",
+                "max_electric_power": 11000
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "999",
+        "source": "datex2_broken",
+        "original_id": "ohne-koordinaten"
+      }
+    ],
+    "total_count": 5,
+    "next_offset": 3,
+    "next_path": "/ocpdb/api/public/v1/locations?limit=1000&offset=3"
+  },
+  "locationsPage2": {
+    "items": [
+      {
+        "id": "456",
+        "source": "datex2_wirelane",
+        "original_id": "WL-77",
+        "address": "Hauptstraße 3",
+        "city": "Emmendingen",
+        "last_updated": "2026-11-18T07:25:00Z",
+        "coordinates": { "lat": 48.121, "lon": 7.849 },
+        "charging_pool": [
+          {
+            "evses": [
+              {
+                "uid": "262346087",
+                "status": "SOMETHING_NEW",
+                "status_last_updated": "2026-11-18T07:00:00Z",
+                "connectors": [
+                  {
+                    "standard": "IEC_62196_T2",
+                    "power_type": "AC_1_PHASE",
+                    "max_electric_power": 3700
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "x-1",
+        "source": "datex2_broken",
+        "original_id": "kaputte-id",
+        "coordinates": { "lat": 48, "lon": 7 }
+      }
+    ],
+    "total_count": 5,
+    "next_offset": 5,
+    "next_path": null
+  },
+  "locationsPage3": {
+    "items": [],
+    "total_count": 5,
+    "next_offset": null,
+    "next_path": null
+  },
+  "evseDelta": {
+    "items": [
+      {
+        "uid": "262346087",
+        "evse_id": "DESHEE002904",
+        "status": "CHARGING",
+        "last_updated": "2026-11-18T07:26:56Z",
+        "status_last_updated": "2026-11-18T07:26:56Z",
+        "connectors": []
+      },
+      {
+        "uid": "262347501",
+        "evse_id": "DEENBE001",
+        "status": "OUTOFORDER",
+        "last_updated": "2026-11-18T07:30:00Z",
+        "status_last_updated": "2026-11-18T07:29:00Z",
+        "connectors": []
+      },
+      {
+        "uid": "777000111",
+        "evse_id": "DEUNKNOWN",
+        "status": "AVAILABLE",
+        "last_updated": "2026-11-18T07:28:00Z",
+        "status_last_updated": "2026-11-18T07:28:00Z",
+        "connectors": []
+      },
+      {
+        "uid": "kaputt",
+        "status": "AVAILABLE",
+        "last_updated": "2026-11-18T07:28:00Z"
+      }
+    ],
+    "total_count": 4,
+    "next_offset": null,
+    "next_path": null
+  }
+}

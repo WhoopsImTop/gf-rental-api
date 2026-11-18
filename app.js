@@ -30,6 +30,10 @@ const contractRoute = require("./routes/contractRoute");
 const analyticsRoute = require("./routes/analyticsRoute");
 const feedbackPublicRoute = require("./routes/feedback/public");
 const feedbackAdminRoute = require("./routes/feedback/admin");
+
+const chargingStationRoute = require(
+  "./routes/charging-stations/chargingStationRoute",
+);
 const { requireRole } = require("./middleware/requireRole");
 
 const AuthentificationRoute = require("./routes/auth/AuthentificationRoute");
@@ -43,9 +47,10 @@ const {
 } = require("./services/followup/followupScheduler");
 const followupRoute = require("./routes/followupRoute");
 const assistantRoute = require("./routes/assistant/assistantRoute");
+const { startAssistantScheduler } = require("./services/assistant/scheduler");
 const {
-  startAssistantScheduler,
-} = require("./services/assistant/scheduler");
+  startChargingSyncScheduler,
+} = require("./services/charging-stations/ocpdbSyncScheduler");
 
 const serverPort = process.env.SERVERPORT || 3000;
 const app = express();
@@ -181,6 +186,8 @@ app.use(
   feedbackAdminRoute,
 );
 
+app.use("/api/charging-stations", chargingStationRoute);
+
 // Allgemeine Fehlerbehandlung
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -197,6 +204,7 @@ app.listen(serverPort, async () => {
     startAnonymizationScheduler();
     startFollowupScheduler();
     startAssistantScheduler();
+    startChargingSyncScheduler();
   } catch (error) {
     console.error("Fehler bei der Verbindung zur Datenbank:", error);
     process.exit(1); // Beende den Prozess, falls die Verbindung fehlschlägt

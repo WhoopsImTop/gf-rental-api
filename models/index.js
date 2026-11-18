@@ -18,6 +18,7 @@ fs.readdirSync(__dirname)
   });
 
 require("./feedback")(sequelize, DataTypes, db);
+require("./charging-stations")(sequelize, DataTypes, db);
 
 Object.keys(db).forEach((modelName) => {
   if (db[modelName].associate) {
