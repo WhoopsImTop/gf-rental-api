@@ -189,3 +189,35 @@ test("createThumbnail returns null for broken files instead of throwing", async 
   t.after(() => fs.rm(tmp, { recursive: true, force: true }));
   assert.equal(await imageVariants.createThumbnail("does-not-exist.jpg", "image/jpeg"), null);
 });
+
+test("createThumbnail refuses disguised files (SVG/HEIF content with .jpg name)", async (t) => {
+  const cases = [
+    ["svg", Buffer.from('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>')],
+    // ISO-BMFF-Header einer HEIC-Datei: ....ftypheic
+    ["heic", Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from("ftypheic"), Buffer.alloc(16)])],
+  ];
+  for (const [label, content] of cases) {
+    const filename = `test-disguised-${label}-${process.pid}-${Date.now()}.jpg`;
+    const source = path.join(imageVariants.UPLOAD_DIR, filename);
+    const target = path.join(imageVariants.THUMB_DIR, imageVariants.thumbnailFilename(filename));
+    t.after(async () => {
+      await fs.rm(source, { force: true });
+      await fs.rm(target, { force: true });
+    });
+    await fs.writeFile(source, content);
+
+    assert.equal(await imageVariants.createThumbnail(filename, "image/jpeg"), null, label);
+    await assert.rejects(fs.access(target), `${label} thumbnail must not exist`);
+  }
+});
+
+test("sniffRasterFormat detects jpeg, png and webp by content", async (t) => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "sniff-"));
+  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
+  const base = sharp({ create: { width: 4, height: 4, channels: 3, background: "#ffffff" } });
+  for (const format of ["jpeg", "png", "webp"]) {
+    const file = path.join(tmp, `x.${format}`);
+    await base.clone().toFormat(format).toFile(file);
+    assert.equal(await imageVariants.sniffRasterFormat(file), format);
+  }
+});
