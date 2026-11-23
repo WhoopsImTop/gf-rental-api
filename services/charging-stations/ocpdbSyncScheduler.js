@@ -15,8 +15,6 @@ const PROCEDURES = [
   "recompute_scope",
 ];
 const FULL_CHECK_INTERVAL_MS = 15 * 60_000;
-// Manche uids bleiben dauerhaft unbekannt; sonst liefe location_delta jede Minute.
-const EARLY_LOCATION_DELTA_GAP_MS = 5 * 60_000;
 
 function isEnabled() {
   return String(process.env.CHARGING_SYNC_ENABLED ?? "false") === "true";
@@ -75,26 +73,12 @@ function startChargingSyncScheduler() {
   );
   const fullHourUtc = parseHour(process.env.CHARGING_SYNC_FULL_HOUR_UTC, 2);
 
-  let lastLocationDeltaAt = 0;
-  let locationDeltaRequested = false;
   let lastFullDay = null;
 
-  const locationDelta = singleRun(async () => {
-    lastLocationDeltaAt = Date.now();
-    locationDeltaRequested = false;
-    await runLocationDelta();
-  });
-
-  const evseDelta = singleRun(async () => {
-    const result = await runEvseDelta();
-    if (result?.unknown > 0) locationDeltaRequested = true;
-    if (
-      locationDeltaRequested &&
-      Date.now() - lastLocationDeltaAt >= EARLY_LOCATION_DELTA_GAP_MS
-    ) {
-      locationDelta();
-    }
-  });
+  // Unbekannte EVSE-uids holt der reguläre location_delta nach; kein Vorziehen,
+  // weil manche uids dauerhaft unbekannt bleiben.
+  const locationDelta = singleRun(runLocationDelta);
+  const evseDelta = singleRun(runEvseDelta);
 
   // Erstladung, solange es noch keinen erfolgreichen Lauf gibt; danach nachts.
   const locationFull = singleRun(async () => {

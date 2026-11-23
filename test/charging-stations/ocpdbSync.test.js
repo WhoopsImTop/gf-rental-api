@@ -117,6 +117,8 @@ function mockDb(
     patch(db.SyncState, {
       findByPk: async () => syncState,
       upsert: async (values) => record("SyncState.upsert", { values }),
+      bulkCreate: async (rows, options) =>
+        record("SyncState.bulkCreate", { rows, options }),
       update: async (values, options) =>
         record("SyncState.update", { values, options }),
     }),
@@ -488,6 +490,14 @@ test("runLocationFull upserts in batches, deactivates before the procedures and 
     showUnknown: 0,
   });
 
+  // Fehlende Delta-Zeilen anlegen, vorhandene ohne Cursor nachziehen.
+  const cursorRows = dbMock.of("SyncState.bulkCreate")[0];
+  assert.deepEqual(
+    cursorRows.rows.map((row) => row.job),
+    ["evse_delta", "location_delta"],
+  );
+  assert.ok(cursorRows.rows.every((row) => row.cursor_ts instanceof Date));
+  assert.equal(cursorRows.options.ignoreDuplicates, true);
   const cursorInit = dbMock.of("SyncState.update")[0];
   assert.deepEqual(cursorInit.options.where, {
     job: ["evse_delta", "location_delta"],
@@ -720,12 +730,35 @@ test("runLocationDelta deactivates EVSEs that vanished from changed locations", 
 
   // Standorte selbst werden im Delta nie deaktiviert.
   assert.equal(dbMock.of("Location.update").length, 0);
+  // Ohne mark_duplicates: das läuft nur bei der Erstladung.
   assert.deepEqual(
-    dbMock.calls().map((entry) => entry.sql)[0],
-    "CALL refresh_status(NULL)",
+    dbMock.calls().map((entry) => entry.sql),
+    [
+      "CALL refresh_status(NULL)",
+      "CALL assign_operators()",
+      "CALL recompute_scope(:polygon, :showUnknown)",
+    ],
   );
   assert.deepEqual(
     dbMock.of("SyncState.upsert")[0].values.cursor_ts,
     new Date("2026-11-18T07:23:00Z"),
   );
+});
+
+test("runLocationDelta skips the procedures when nothing changed", async (t) => {
+  mockClock(t);
+  mockHttp(t, [ok(fixtures.locationsPage3)]);
+  const dbMock = mockDb(t, {
+    syncState: {
+      job: "location_delta",
+      cursor_ts: new Date("2026-11-18T07:00:00Z"),
+    },
+  });
+
+  await runLocationDelta();
+
+  assert.equal(dbMock.calls().length, 0);
+  const state = dbMock.of("SyncState.upsert")[0].values;
+  assert.equal(state.last_status, "OK");
+  assert.ok(!("cursor_ts" in state));
 });
