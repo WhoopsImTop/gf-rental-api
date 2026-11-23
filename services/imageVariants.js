@@ -20,6 +20,30 @@ function isRasterImage(mimeType) {
   return RASTER_MIME_TYPES.has(String(mimeType || "").toLowerCase());
 }
 
+/**
+ * Erkennt das echte Format an den ersten Bytes. Endung und MIME-Typ kommen vom
+ * Client; ohne diese Prüfung könnte eine als .jpg getarnte HEIF- oder SVG-Datei
+ * die entsprechenden libvips-Decoder erreichen.
+ */
+async function sniffRasterFormat(filePath) {
+  const handle = await fs.open(filePath, "r");
+  try {
+    const header = Buffer.alloc(12);
+    const { bytesRead } = await handle.read(header, 0, 12, 0);
+    if (bytesRead < 12) return null;
+    if (header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) return "jpeg";
+    if (header.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+      return "png";
+    }
+    if (header.toString("ascii", 0, 4) === "RIFF" && header.toString("ascii", 8, 12) === "WEBP") {
+      return "webp";
+    }
+    return null;
+  } finally {
+    await handle.close();
+  }
+}
+
 function thumbnailFilename(filename) {
   return `${path.parse(filename).name}.webp`;
 }
@@ -40,6 +64,12 @@ async function createThumbnail(filename, mimeType) {
   const target = path.join(THUMB_DIR, thumbnailFilename(filename));
 
   try {
+    const format = await sniffRasterFormat(source);
+    if (!format) {
+      logger("warn", `[createThumbnail] ${filename}: Inhalt ist kein JPEG/PNG/WebP, übersprungen`);
+      return null;
+    }
+
     await fs.mkdir(THUMB_DIR, { recursive: true });
     await sharp(source, { failOn: "none" })
       .rotate()
@@ -66,6 +96,7 @@ module.exports = {
   createThumbnail,
   filenameFromMediaUrl,
   isRasterImage,
+  sniffRasterFormat,
   thumbnailFilename,
   THUMB_DIR,
   UPLOAD_DIR,
