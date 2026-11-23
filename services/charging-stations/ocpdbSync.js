@@ -30,6 +30,7 @@ const LOCKS = {
   location_delta: "ocpdb_sync_location",
   evse_delta: "ocpdb_sync_evse",
 };
+const DELTA_JOBS = ["evse_delta", "location_delta"];
 
 const LOCATION_UPDATE_FIELDS = [
   "source_uid",
@@ -475,12 +476,15 @@ async function syncLocationPages(params, seenAt, options) {
   return stats;
 }
 
-async function runProcedures({ polygon, showUnknown }) {
+/** mark_duplicates rechnet über alle Standorte paarweise (lokal ~30 s) und läuft deshalb nur bei der Erstladung. */
+async function runProcedures({ polygon, showUnknown }, { duplicates }) {
   await db.sequelize.query("CALL refresh_status(NULL)");
   await db.sequelize.query("CALL assign_operators()");
-  await db.sequelize.query("CALL mark_duplicates(:meter)", {
-    replacements: { meter: DUPLICATE_RADIUS_M },
-  });
+  if (duplicates) {
+    await db.sequelize.query("CALL mark_duplicates(:meter)", {
+      replacements: { meter: DUPLICATE_RADIUS_M },
+    });
+  }
   await db.sequelize.query("CALL recompute_scope(:polygon, :showUnknown)", {
     replacements: { polygon, showUnknown },
   });
@@ -555,12 +559,17 @@ const runLocationFull = () =>
       const [evses] = await db.Evse.update({ is_active: false }, { where });
       deactivated = locations + evses;
     }
-    await runProcedures(scope);
+    await runProcedures(scope, { duplicates: true });
 
-    // Erster Lauf: Deltas starten ab T0.
+    // Erster Lauf: Deltas starten ab T0. Fehlende Zeilen anlegen, sonst greift das update
+    // nicht und die Deltas warten bis zur nächsten Erstladung.
+    await db.SyncState.bulkCreate(
+      DELTA_JOBS.map((job) => ({ job, cursor_ts: startedAt })),
+      { ignoreDuplicates: true },
+    );
     await db.SyncState.update(
       { cursor_ts: startedAt },
-      { where: { job: ["evse_delta", "location_delta"], cursor_ts: null } },
+      { where: { job: DELTA_JOBS, cursor_ts: null } },
     );
 
     const message = `${stats.written} Standorte, ${stats.skipped} übersprungen, ${deactivated} deaktiviert`;
@@ -663,8 +672,8 @@ const runLocationDelta = () =>
     const stats = await syncLocationPages(params, new Date(), {
       deactivateMissingEvses: true,
     });
-    // refresh_status zusätzlich, damit neue/deaktivierte EVSEs in state und mark_duplicates zählen.
-    await runProcedures(scope);
+    // Nur bei Änderungen; refresh_status zusätzlich, damit neue/deaktivierte EVSEs in state zählen.
+    if (stats.written > 0) await runProcedures(scope, { duplicates: false });
 
     const message = `${stats.written} Standorte, ${stats.skipped} übersprungen`;
     if (stats.items) logger("info", `[ocpdbSync] location_delta: ${message}`);

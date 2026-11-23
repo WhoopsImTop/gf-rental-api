@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const helmet = require("helmet");
+const path = require("path");
 const rateLimit = require("express-rate-limit");
 const { sequelize } = require("./models");
 
@@ -96,8 +97,19 @@ const corsOptions = {
 };
 
 // Middleware
-// Wende CORS auf statische Dateien an
-app.use("/public", cors(corsOptions), express.static("public"));
+// CORS fro static files so browser and cdn can cache them
+const UPLOAD_CACHE_CONTROL = "public, max-age=31536000, immutable";
+app.use(
+  "/public",
+  cors(corsOptions),
+  express.static("public", {
+    setHeaders: (res, filePath) => {
+      if (filePath.includes(`${path.sep}uploads${path.sep}`)) {
+        res.setHeader("Cache-Control", UPLOAD_CACHE_CONTROL);
+      }
+    },
+  }),
+);
 
 // Weitere Routen und Middleware
 app.use(cors(corsOptions)); // Gilt für die anderen Routen
